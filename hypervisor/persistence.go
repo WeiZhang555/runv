@@ -3,7 +3,7 @@ package hypervisor
 import (
 	"encoding/json"
 	"errors"
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/pod"
 	"github.com/hyperhq/runv/hypervisor/types"
 	"sync"
@@ -168,7 +168,7 @@ func (pinfo *PersistInfo) vmContext(hub chan VmEvent, client chan *types.VmRespo
 
 	dc, err := HDriver.LoadContext(pinfo.DriverInfo)
 	if err != nil {
-		glog.Error("cannot load driver context: ", err.Error())
+		logrus.Error("cannot load driver context: ", err.Error())
 		return nil, err
 	}
 

@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/network"
 	"github.com/hyperhq/runv/hypervisor/pod"
 	"github.com/hyperhq/runv/lib/govbox"
@@ -27,7 +27,7 @@ func (vd *VBoxDriver) InitNetwork(bIface, bIP string) error {
 
 	bip, ipnet, err := net.ParseCIDR(network.BridgeIP)
 	if err != nil {
-		glog.Errorf(err.Error())
+		logrus.Errorf(err.Error())
 		return err
 	}
 
@@ -35,27 +35,27 @@ func (vd *VBoxDriver) InitNetwork(bIface, bIP string) error {
 	inc(gateway, 2)
 
 	if !ipnet.Contains(gateway) {
-		glog.Errorf(err.Error())
+		logrus.Errorf(err.Error())
 		return fmt.Errorf("get Gateway from BridgeIP %s failed", network.BridgeIP)
 	}
 	prefixSize, _ := ipnet.Mask.Size()
 	_, network.BridgeIPv4Net, err = net.ParseCIDR(gateway.String() + fmt.Sprintf("/%d", prefixSize))
 	if err != nil {
-		glog.Errorf(err.Error())
+		logrus.Errorf(err.Error())
 		return err
 	}
 	network.BridgeIPv4Net.IP = gateway
-	glog.Warningf(network.BridgeIPv4Net.String())
+	logrus.Warningf(network.BridgeIPv4Net.String())
 	/*
 	 * Filter the IPs which can not be used for VMs
 	 */
 	bip = bip.Mask(ipnet.Mask)
 	for inc(bip, 1); ipnet.Contains(bip) && i < 2; inc(bip, 1) {
 		i++
-		glog.V(3).Infof("Try %s", bip.String())
+		logrus.Infof("Try %s", bip.String())
 		_, err = network.IpAllocator.RequestIP(network.BridgeIPv4Net, bip)
 		if err != nil {
-			glog.Errorf(err.Error())
+			logrus.Errorf(err.Error())
 			return err
 		}
 	}
@@ -103,7 +103,7 @@ func ReleasePortMaps(vmId string, containerip string, maps []pod.UserContainerPo
 	}
 
 	for _, m := range maps {
-		glog.V(1).Infof("release port map %d", m.HostPort)
+		logrus.Infof("release port map %d", m.HostPort)
 		err := network.PortMapper.ReleaseMap(m.Protocol, m.HostPort)
 		if err != nil {
 			continue
@@ -124,7 +124,7 @@ func (vc *VBoxContext) AllocateNetwork(vmId, requestedIP string,
 
 	err = SetupPortMaps(vmId, ip.String(), maps)
 	if err != nil {
-		glog.Errorf("Setup Port Map failed %s", err)
+		logrus.Errorf("Setup Port Map failed %s", err)
 		return nil, err
 	}
 
@@ -145,7 +145,7 @@ func (vc *VBoxContext) ConfigureNetwork(vmId,
 	config pod.UserInterface) (*network.Settings, error) {
 	ip, ipnet, err := net.ParseCIDR(config.Ip)
 	if err != nil {
-		glog.Errorf("Parse interface IP failed %s", err)
+		logrus.Errorf("Parse interface IP failed %s", err)
 		return nil, err
 	}
 
@@ -153,7 +153,7 @@ func (vc *VBoxContext) ConfigureNetwork(vmId,
 
 	err = SetupPortMaps(vmId, ip.String(), maps)
 	if err != nil {
-		glog.Errorf("Setup Port Map failed %s", err)
+		logrus.Errorf("Setup Port Map failed %s", err)
 		return nil, err
 	}
 
@@ -176,7 +176,7 @@ func (vc *VBoxContext) ReleaseNetwork(vmId, releasedIP string, maps []pod.UserCo
 	}
 
 	if err := ReleasePortMaps(vmId, releasedIP, maps); err != nil {
-		glog.Errorf("fail to release port map %s", err)
+		logrus.Errorf("fail to release port map %s", err)
 		return err
 	}
 

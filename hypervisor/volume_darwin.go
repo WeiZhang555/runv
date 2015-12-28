@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/pod"
 )
 
@@ -16,11 +16,11 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan VmEvent) (
 }
 
 func UmountOverlayContainer(shareDir, image string, index int, hub chan VmEvent) {
-	glog.Warningf("Non support")
+	logrus.Warningf("Non support")
 }
 
 func UmountAufsContainer(shareDir, image string, index int, hub chan VmEvent) {
-	glog.Warningf("Non support")
+	logrus.Warningf("Non support")
 }
 
 func UmountVfsContainer(shareDir, image string, index int, hub chan VmEvent) {
@@ -34,7 +34,7 @@ func UmountVfsContainer(shareDir, image string, index int, hub chan VmEvent) {
 				success = true
 				break
 			}
-			glog.Warningf("Cannot umount vfs %s: %s", mount, err.Error())
+			logrus.Warningf("Cannot umount vfs %s: %s", mount, err.Error())
 			success = false
 		} else {
 			success = true

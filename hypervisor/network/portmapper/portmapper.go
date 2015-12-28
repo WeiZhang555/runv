@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 )
 
 type PortMap struct {
@@ -71,7 +71,7 @@ func (p *PortMapper) ReleaseMap(protocol string, hostPort int) error {
 
 	_, ok := pset[hostPort]
 	if !ok {
-		glog.Errorf("Host port %d has not been used", hostPort)
+		logrus.Errorf("Host port %d has not been used", hostPort)
 	}
 
 	delete(pset, hostPort)

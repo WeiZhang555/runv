@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/pod"
 )
 
@@ -29,7 +29,7 @@ func UmountOverlayContainer(shareDir, image string, index int, hub chan VmEvent)
 				success = true
 				break
 			}
-			glog.Warningf("Cannot umount overlay %s: %s", mount, err.Error())
+			logrus.Warningf("Cannot umount overlay %s: %s", mount, err.Error())
 			success = false
 		} else {
 			success = true
@@ -40,14 +40,14 @@ func UmountOverlayContainer(shareDir, image string, index int, hub chan VmEvent)
 }
 
 func aufsUnmount(target string) error {
-	glog.V(1).Infof("Ready to unmount the target : %s", target)
+	logrus.Infof("Ready to unmount the target : %s", target)
 	if _, err := os.Stat(target); err != nil && os.IsNotExist(err) {
 		return nil
 	}
 	cmdString := fmt.Sprintf("auplink %s flush", target)
 	cmd := exec.Command("/bin/sh", "-c", cmdString)
 	if err := cmd.Run(); err != nil {
-		glog.Warningf("Couldn't run auplink command : %s\n%s", err.Error())
+		logrus.Warningf("Couldn't run auplink command : %s\n%s", err.Error())
 	}
 	if err := syscall.Unmount(target, 0); err != nil {
 		return err
@@ -67,7 +67,7 @@ func UmountAufsContainer(shareDir, image string, index int, hub chan VmEvent) {
 				success = true
 				break
 			}
-			glog.Warningf("Cannot umount aufs %s: %s", mount, err.Error())
+			logrus.Warningf("Cannot umount aufs %s: %s", mount, err.Error())
 			success = false
 		} else {
 			success = true
@@ -82,10 +82,10 @@ func UmountVolume(shareDir, volPath string, name string, hub chan VmEvent) {
 	success := true
 	err := syscall.Unmount(mount, 0)
 	if err != nil {
-		glog.Warningf("Cannot umount volume %s: %s", mount, err.Error())
+		logrus.Warningf("Cannot umount volume %s: %s", mount, err.Error())
 		err = syscall.Unmount(mount, syscall.MNT_DETACH)
 		if err != nil {
-			glog.Warningf("Cannot lazy umount volume %s: %s", mount, err.Error())
+			logrus.Warningf("Cannot lazy umount volume %s: %s", mount, err.Error())
 			success = false
 		} else {
 			success = true
@@ -104,7 +104,7 @@ func UmountDMDevice(deviceFullPath, name string, hub chan VmEvent) {
 	cmd := exec.Command("/bin/sh", "-c", args)
 	success := true
 	if output, err := cmd.CombinedOutput(); err != nil {
-		glog.Warningf("Cannot umount device %s: %s, %s", deviceFullPath, err.Error(), output)
+		logrus.Warningf("Cannot umount device %s: %s, %s", deviceFullPath, err.Error(), output)
 		// retry
 		cmd := exec.Command("/bin/sh", "-c", args)
 		if err := cmd.Run(); err != nil {

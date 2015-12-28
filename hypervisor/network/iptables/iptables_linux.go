@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 )
 
 type Action string
@@ -87,7 +87,7 @@ func PortMapUsed(chain string, rule []string) bool {
 	existingRules, _ := exec.Command("iptables", "-t", "nat", "-S", chain).Output()
 	ruleString := strings.Join(rule, " ")
 
-	glog.V(3).Infof("MapUsed %s", ruleString)
+	logrus.Infof("MapUsed %s", ruleString)
 	// regex to replace ips in rule
 	re := regexp.MustCompile(`[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\:[0-9]{1,2}`)
 
@@ -137,7 +137,7 @@ func Raw(args ...string) ([]byte, error) {
 		args = append([]string{"--wait"}, args...)
 	}
 
-	glog.V(3).Infof("%s, %v", iptablesPath, args)
+	logrus.Infof("%s, %v", iptablesPath, args)
 
 	output, err := exec.Command(iptablesPath, args...).CombinedOutput()
 	if err != nil {

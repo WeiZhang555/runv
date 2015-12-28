@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/types"
 	"github.com/hyperhq/runv/lib/utils"
 )
@@ -71,21 +71,21 @@ func readTtyMessage(conn *net.UnixConn) (*ttyMessage, error) {
 		if want > 512 {
 			want = 512
 		}
-		glog.V(1).Infof("tty: trying to read %d bytes", want)
+		logrus.Infof("tty: trying to read %d bytes", want)
 		nr, err := conn.Read(buf[:want])
 		if err != nil {
-			glog.Error("read tty data failed")
+			logrus.Error("read tty data failed")
 			return nil, err
 		}
 
 		res = append(res, buf[:nr]...)
 		read = read + nr
 
-		glog.V(1).Infof("tty: read %d/%d [length = %d]", read, needRead, length)
+		logrus.Infof("tty: read %d/%d [length = %d]", read, needRead, length)
 
 		if length == 0 && read >= 12 {
 			length = int(binary.BigEndian.Uint32(res[8:12]))
-			glog.V(1).Infof("data length is %d", length)
+			logrus.Infof("data length is %d", length)
 			if length > 12 {
 				needRead = length
 			}
@@ -102,16 +102,16 @@ func waitTtyMessage(ctx *VmContext, conn *net.UnixConn) {
 	for {
 		msg, ok := <-ctx.ptys.channel
 		if !ok {
-			glog.V(1).Info("tty chan closed, quit sent goroutine")
+			logrus.Info("tty chan closed, quit sent goroutine")
 			break
 		}
 
-		glog.V(3).Infof("trying to write to session %d", msg.session)
+		logrus.Infof("trying to write to session %d", msg.session)
 
 		if _, ok := ctx.ptys.ttys[msg.session]; ok {
 			_, err := conn.Write(msg.toBuffer())
 			if err != nil {
-				glog.V(1).Info("Cannot write to tty socket: ", err.Error())
+				logrus.Info("Cannot write to tty socket: ", err.Error())
 				return
 			}
 		}
@@ -121,28 +121,28 @@ func waitTtyMessage(ctx *VmContext, conn *net.UnixConn) {
 func waitPts(ctx *VmContext) {
 	conn, err := utils.UnixSocketConnect(ctx.TtySockName)
 	if err != nil {
-		glog.Error("Cannot connect to tty socket ", err.Error())
+		logrus.Error("Cannot connect to tty socket ", err.Error())
 		ctx.Hub <- &InitFailedEvent{
 			Reason: "Cannot connect to tty socket " + err.Error(),
 		}
 		return
 	}
 
-	glog.V(1).Info("tty socket connected")
+	logrus.Info("tty socket connected")
 
 	go waitTtyMessage(ctx, conn.(*net.UnixConn))
 
 	for {
 		res, err := readTtyMessage(conn.(*net.UnixConn))
 		if err != nil {
-			glog.V(1).Info("tty socket closed, quit the reading goroutine ", err.Error())
+			logrus.Info("tty socket closed, quit the reading goroutine ", err.Error())
 			ctx.Hub <- &Interrupted{Reason: "tty socket failed " + err.Error()}
 			close(ctx.ptys.channel)
 			return
 		}
 		if ta, ok := ctx.ptys.ttys[res.session]; ok {
 			if len(res.message) == 0 {
-				glog.V(1).Infof("session %d closed by peer, close pty", res.session)
+				logrus.Infof("session %d closed by peer, close pty", res.session)
 				ctx.ptys.Close(ctx, res.session)
 			} else {
 				for _, tty := range ta.attachments {
@@ -155,7 +155,7 @@ func waitPts(ctx *VmContext) {
 						}
 					}
 					if err != nil {
-						glog.V(1).Infof("fail to write session %d, close pty attachment", res.session)
+						logrus.Infof("fail to write session %d, close pty attachment", res.session)
 						ctx.ptys.Detach(ctx, res.session, tty)
 					}
 				}
@@ -214,7 +214,7 @@ func (ta *ttyAttachments) empty() bool {
 
 func (tty *TtyIO) Close() string {
 
-	glog.V(1).Info("Close tty ", tty.ClientTag)
+	logrus.Info("Close tty ", tty.ClientTag)
 
 	if tty.Stdin != nil {
 		tty.Stdin.Close()
@@ -274,14 +274,14 @@ func (pts *pseudoTtys) ptyConnect(ctx *VmContext, container int, session uint64,
 			for {
 				nr, err := tty.Stdin.Read(buf)
 				if err != nil {
-					glog.Info("a stdin closed, ", err.Error())
+					logrus.Info("a stdin closed, ", err.Error())
 					return
 				} else if nr == 1 && buf[0] == ExitChar {
-					glog.Info("got stdin detach char, exit term")
+					logrus.Info("got stdin detach char, exit term")
 					return
 				}
 
-				glog.V(3).Infof("trying to input char: %d and %d chars", buf[0], nr)
+				logrus.Infof("trying to input char: %d and %d chars", buf[0], nr)
 
 				mbuf := make([]byte, nr)
 				copy(mbuf, buf[:nr])
@@ -355,7 +355,7 @@ func TtyLiner(conn io.Reader, output chan string) {
 
 		nr, err := conn.Read(buf)
 		if err != nil || nr < 1 {
-			glog.V(1).Info("Input byte chan closed, close the output string chan")
+			logrus.Info("Input byte chan closed, close the output string chan")
 			close(output)
 			return
 		}

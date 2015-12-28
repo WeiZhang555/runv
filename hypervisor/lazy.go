@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/types"
 )
 
 func LazyVmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *BootConfig, keep int) {
 
-	glog.V(1).Infof("Start VM %s in lazy mode, not started yet actually", vmId)
+	logrus.Infof("Start VM %s in lazy mode, not started yet actually", vmId)
 
 	context, err := InitContext(vmId, hub, client, nil, boot, keep)
 	if err != nil {
@@ -23,7 +23,7 @@ func LazyVmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, bo
 	}
 
 	if _, ok := context.DCtx.(LazyDriverContext); !ok {
-		glog.Error("not a lazy driver, cannot call lazy loop")
+		logrus.Error("not a lazy driver, cannot call lazy loop")
 		context.reportBadRequest("not a lazy driver, cannot call lazy loop")
 		return
 	}
@@ -31,7 +31,7 @@ func LazyVmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, bo
 	err = context.DCtx.(LazyDriverContext).InitVM(context)
 	if err != nil {
 		estr := fmt.Sprintf("failed to create VM(%s): %s", vmId, err.Error())
-		glog.Error(estr)
+		logrus.Error(estr)
 		client <- &types.VmResponse{
 			VmId:  vmId,
 			Code:  types.E_BAD_REQUEST,
@@ -47,9 +47,9 @@ func LazyVmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, bo
 func statePreparing(ctx *VmContext, ev VmEvent) {
 	switch ev.Event() {
 	case EVENT_VM_EXIT, ERROR_INTERRUPTED:
-		glog.Info("VM exited before start...")
+		logrus.Info("VM exited before start...")
 	case COMMAND_SHUTDOWN, COMMAND_RELEASE:
-		glog.Info("got shutdown or release command, not started yet")
+		logrus.Info("got shutdown or release command, not started yet")
 		ctx.reportVmShutdown()
 		ctx.Become(nil, "NONE")
 	case COMMAND_EXEC:
@@ -58,14 +58,14 @@ func statePreparing(ctx *VmContext, ev VmEvent) {
 		cmd := ev.(*WindowSizeCommand)
 		ctx.setWindowSize(cmd.ClientTag, cmd.Size)
 	case COMMAND_RUN_POD, COMMAND_REPLACE_POD:
-		glog.Info("got spec, prepare devices")
+		logrus.Info("got spec, prepare devices")
 		if ok := ctx.lazyPrepareDevice(ev.(*RunPodCommand)); ok {
 			ctx.startSocks()
 			ctx.DCtx.(LazyDriverContext).LazyLaunch(ctx)
 			ctx.setTimeout(60)
 			ctx.Become(stateStarting, "STARTING")
 		} else {
-			glog.Warning("Fail to prepare devices, quit")
+			logrus.Warning("Fail to prepare devices, quit")
 			ctx.Become(nil, "None")
 		}
 	default:
@@ -82,10 +82,8 @@ func (ctx *VmContext) lazyPrepareDevice(cmd *RunPodCommand) bool {
 
 	ctx.InitDeviceContext(cmd.Spec, cmd.Wg, cmd.Containers, cmd.Volumes)
 
-	if glog.V(2) {
-		res, _ := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
-		glog.Info("initial vm spec: ", string(res))
-	}
+	res, _ := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
+	logrus.Info("initial vm spec: ", string(res))
 
 	err := ctx.lazyAllocateNetworks()
 	if err != nil {

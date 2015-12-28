@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor"
 	"github.com/hyperhq/runv/lib/utils"
 )
@@ -16,23 +16,23 @@ func watchDog(qc *QemuContext, hub chan hypervisor.VmEvent) {
 		if ok {
 			switch msg {
 			case "quit":
-				glog.V(1).Info("quit watch dog.")
+				logrus.Info("quit watch dog.")
 				return
 			case "kill":
 				success := false
 				if qc.process != nil {
-					glog.V(0).Infof("kill Qemu... %d", qc.process.Pid)
+					logrus.Infof("kill Qemu... %d", qc.process.Pid)
 					if err := qc.process.Kill(); err == nil {
 						success = true
 					}
 				} else {
-					glog.Warning("no process to be killed")
+					logrus.Warning("no process to be killed")
 				}
 				hub <- &hypervisor.VmKilledEvent{Success: success}
 				return
 			}
 		} else {
-			glog.V(1).Info("chan closed, quit watch dog.")
+			logrus.Info("chan closed, quit watch dog.")
 			break
 		}
 	}
@@ -59,23 +59,21 @@ func launchQemu(qc *QemuContext, ctx *hypervisor.VmContext) {
 
 	args := qc.arguments(ctx)
 
-	if glog.V(1) {
-		glog.Info("cmdline arguments: ", strings.Join(args, " "))
-	}
+	logrus.Info("cmdline arguments: ", strings.Join(args, " "))
 
 	pid, err := utils.ExecInDaemon(qemu, append([]string{"qemu-system-x86_64"}, args...))
 	if err != nil {
 		//fail to daemonize
-		glog.Error("%v", err)
+		logrus.Error("%v", err)
 		ctx.Hub <- &hypervisor.VmStartFailEvent{Message: "try to start qemu failed"}
 		return
 	}
 
-	glog.V(1).Infof("starting daemon with pid: %d", pid)
+	logrus.Infof("starting daemon with pid: %d", pid)
 
 	err = ctx.DCtx.(*QemuContext).watchPid(int(pid), ctx.Hub)
 	if err != nil {
-		glog.Error("watch qemu process failed")
+		logrus.Error("watch qemu process failed")
 		ctx.Hub <- &hypervisor.VmStartFailEvent{Message: "watch qemu process failed"}
 		return
 	}

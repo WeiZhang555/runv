@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"encoding/json"
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/pod"
 	"github.com/hyperhq/runv/hypervisor/types"
 )
@@ -93,9 +93,9 @@ func (vm *Vm) Kill() (int, string, error) {
 			stop = true
 		}
 		if Response != nil {
-			glog.V(1).Infof("Got response: %d: %s", Response.Code, Response.Cause)
+			logrus.Infof("Got response: %d: %s", Response.Code, Response.Cause)
 		} else {
-			glog.V(1).Infof("Nil response from status chan")
+			logrus.Infof("Nil response from status chan")
 		}
 	}
 
@@ -108,7 +108,7 @@ func (vm *Vm) Kill() (int, string, error) {
 
 // This function will only be invoked during daemon start
 func (vm *Vm) AssociateVm(mypod *PodStatus, data []byte) error {
-	glog.V(1).Infof("Associate the POD(%s) with VM(%s)", mypod.Id, mypod.Vm)
+	logrus.Infof("Associate the POD(%s) with VM(%s)", mypod.Id, mypod.Vm)
 	var (
 		PodEvent = make(chan VmEvent, 128)
 		Status   = make(chan *types.VmResponse, 128)
@@ -120,7 +120,7 @@ func (vm *Vm) AssociateVm(mypod *PodStatus, data []byte) error {
 
 	ass := <-Status
 	if ass.Code != types.E_OK {
-		glog.Errorf("cannot associate with vm: %s, error status %d (%s)", mypod.Vm, ass.Code, ass.Cause)
+		logrus.Errorf("cannot associate with vm: %s, error status %d (%s)", mypod.Vm, ass.Code, ass.Cause)
 		return errors.New("load vm status failed")
 	}
 
@@ -197,7 +197,7 @@ func defaultHandlePodEvent(Response *types.VmResponse, data interface{},
 }
 
 func (vm *Vm) handlePodEvent(mypod *PodStatus) {
-	glog.V(1).Infof("hyperHandlePodEvent pod %s, vm %s", mypod.Id, vm.Id)
+	logrus.Infof("hyperHandlePodEvent pod %s, vm %s", mypod.Id, vm.Id)
 
 	Status, err := vm.GetResponseChan()
 	if err != nil {
@@ -281,7 +281,7 @@ func (vm *Vm) StartPod(mypod *PodStatus, userPod *pod.UserPod,
 	// wait for the VM response
 	for {
 		response = <-Status
-		glog.V(1).Infof("Get the response from VM, VM id is %s!", response.VmId)
+		logrus.Infof("Get the response from VM, VM id is %s!", response.VmId)
 		if response.Code == types.E_VM_RUNNING {
 			continue
 		}
@@ -319,7 +319,7 @@ func (vm *Vm) StopPod(mypod *PodStatus, stopVm string) *types.VmResponse {
 		// wait for the VM response
 		for {
 			Response = <-Status
-			glog.V(1).Infof("Got response: %d: %s", Response.Code, Response.Cause)
+			logrus.Infof("Got response: %d: %s", Response.Code, Response.Cause)
 			if Response.Code == types.E_VM_SHUTDOWN {
 				mypod.Vm = ""
 				break
@@ -333,7 +333,7 @@ func (vm *Vm) StopPod(mypod *PodStatus, stopVm string) *types.VmResponse {
 		// wait for the VM response
 		for {
 			Response = <-Status
-			glog.V(1).Infof("Got response: %d: %s", Response.Code, Response.Cause)
+			logrus.Infof("Got response: %d: %s", Response.Code, Response.Cause)
 			if Response.Code == types.E_POD_STOPPED || Response.Code == types.E_BAD_REQUEST || Response.Code == types.E_FAILED {
 				mypod.Vm = ""
 				vm.Status = types.S_VM_IDLE
@@ -380,7 +380,7 @@ func (vm *Vm) WriteFile(container, target string, data []byte) error {
 		if !ok {
 			break
 		}
-		glog.V(1).Infof("Got response: %d: %s", Response.Code, Response.Cause)
+		logrus.Infof("Got response: %d: %s", Response.Code, Response.Cause)
 		if Response.Reply == writeEvent {
 			if Response.Cause == "" {
 				return nil
@@ -423,7 +423,7 @@ func (vm *Vm) ReadFile(container, target string) ([]byte, error) {
 		if !ok {
 			break
 		}
-		glog.V(1).Infof("Got response: %d: %s", Response.Code, Response.Cause)
+		logrus.Infof("Got response: %d: %s", Response.Code, Response.Cause)
 		if Response.Reply == readEvent {
 			if Response.Cause == "" {
 				return Response.Data.([]byte), nil
@@ -464,7 +464,7 @@ func (vm *Vm) KillContainer(container string, signal syscall.Signal) error {
 			return fmt.Errorf("kill container %v failed: get response failed", container)
 		}
 
-		glog.V(1).Infof("Got response: %d: %s", Response.Code, Response.Cause)
+		logrus.Infof("Got response: %d: %s", Response.Code, Response.Cause)
 		if Response.Reply.(*KillCommand) == killCmd {
 			if Response.Cause != "" {
 				return fmt.Errorf("kill container %v failed: %s", container, Response.Cause)
@@ -521,7 +521,7 @@ func (vm *Vm) Exec(Stdin io.ReadCloser, Stdout io.WriteCloser, cmd, tag, contain
 			return fmt.Errorf("exec command %v failed: get response failed", command)
 		}
 
-		glog.V(1).Infof("Got response: %d: %s", Response.Code, Response.Cause)
+		logrus.Infof("Got response: %d: %s", Response.Code, Response.Cause)
 		if Response.Reply.(*ExecCommand) == execCmd {
 			if Response.Cause != "" {
 				return fmt.Errorf("exec command %v failed: %s", command, Response.Cause)

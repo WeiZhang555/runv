@@ -782,7 +782,7 @@ import "C"
 
 import (
 	"errors"
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor"
 	"unsafe"
 )
@@ -851,7 +851,7 @@ func loadXenLib() error {
 func HyperxlInitializeDriver() (*XenDriver, int) {
 
 	var driver *C.struct_hyperxl_driver = nil
-	res := (int)(C.hyperxl_initialize_driver(&driver, (C.bool)(glog.V(1))))
+	res := (int)(C.hyperxl_initialize_driver(&driver, (C.bool)(logrus)))
 	if res == 0 {
 		defer C.free(unsafe.Pointer(driver))
 
@@ -946,9 +946,9 @@ func LibxlCtxFree(ctx LibxlCtxPtr) int {
 func DomainDeath_cgo(domid C.uint32_t) {
 	defer func() { recover() }() //in case the vmContext or channel has been released
 	dom := (uint32)(domid)
-	glog.Infof("got xen hypervisor message: domain %d quit", dom)
+	logrus.Infof("got xen hypervisor message: domain %d quit", dom)
 	if vm, ok := globalDriver.domains[dom]; ok {
-		glog.V(1).Infof("Domain %d managed by xen driver, try close it")
+		logrus.Infof("Domain %d managed by xen driver, try close it")
 		delete(globalDriver.domains, dom)
 		vm.Hub <- &hypervisor.VmExit{}
 		HyperDomainCleanup(globalDriver.Ctx, vm.DCtx.(*XenContext).ev)
@@ -957,7 +957,7 @@ func DomainDeath_cgo(domid C.uint32_t) {
 
 //export hyperxl_log_cgo
 func hyperxl_log_cgo(msg *C.char, len C.int) {
-	if glog.V(1) {
-		glog.Info("[libxl] ", C.GoStringN(msg, len))
+	if logrus {
+		logrus.Info("[libxl] ", C.GoStringN(msg, len))
 	}
 }

@@ -2,7 +2,7 @@ package hypervisor
 
 import (
 	"encoding/json"
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/pod"
 	"github.com/hyperhq/runv/hypervisor/types"
 	"os"
@@ -90,7 +90,7 @@ func InitContext(id string, hub chan VmEvent, client chan *types.VmResponse, dc 
 
 	err = os.MkdirAll(shareDir, 0755)
 	if err != nil {
-		glog.Error("cannot make dir", shareDir, err.Error())
+		logrus.Error("cannot make dir", shareDir, err.Error())
 		return nil, err
 	}
 	defer func() {
@@ -210,11 +210,11 @@ func (ctx *VmContext) Lookup(container string) int {
 	}
 	for idx, c := range ctx.vmSpec.Containers {
 		if c.Id == container {
-			glog.V(1).Infof("found container %s at %d", container, idx)
+			logrus.Infof("found container %s at %d", container, idx)
 			return idx
 		}
 	}
-	glog.V(1).Infof("can not found container %s", container)
+	logrus.Infof("can not found container %s", container)
 	return -1
 }
 
@@ -240,7 +240,7 @@ func (ctx *VmContext) Close() {
 
 func (ctx *VmContext) tryClose() bool {
 	if ctx.deviceReady() {
-		glog.V(1).Info("no more device to release/remove/umount, quit")
+		logrus.Info("no more device to release/remove/umount, quit")
 		ctx.Close()
 		return true
 	}
@@ -253,7 +253,7 @@ func (ctx *VmContext) Become(handler stateHandler, desc string) {
 	ctx.handler = handler
 	ctx.current = desc
 	ctx.lock.Unlock()
-	glog.V(1).Infof("VM %s: state change from %s to '%s'", ctx.Id, orig, desc)
+	logrus.Infof("VM %s: state change from %s to '%s'", ctx.Id, orig, desc)
 }
 
 // InitDeviceContext will init device info in context
@@ -283,13 +283,11 @@ func (ctx *VmContext) InitDeviceContext(spec *pod.UserPod, wg *sync.WaitGroup,
 
 	ctx.initVolumeMap(spec)
 
-	if glog.V(3) {
-		for i, c := range cInfo {
-			glog.Infof("#%d Container Info:", i)
-			b, err := json.MarshalIndent(c, "...|", "    ")
-			if err == nil {
-				glog.Info("\n", string(b))
-			}
+	for i, c := range cInfo {
+		logrus.Infof("#%d Container Info:", i)
+		b, err := json.MarshalIndent(c, "...|", "    ")
+		if err == nil {
+			logrus.Info("\n", string(b))
 		}
 	}
 

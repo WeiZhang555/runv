@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/daemon/logger"
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/pod"
 	"github.com/hyperhq/runv/hypervisor/types"
 )
@@ -178,7 +178,7 @@ func (mypod *PodStatus) GetPodIP(vm *Vm) []string {
 	// wait for the VM response
 	for {
 		response = <-Status
-		glog.V(1).Infof("Got response, Code %d, VM id %s!", response.Code, response.VmId)
+		logrus.Infof("Got response, Code %d, VM id %s!", response.Code, response.VmId)
 		if response.Reply != getPodIPEvent {
 			continue
 		}

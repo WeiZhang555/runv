@@ -1,7 +1,7 @@
 package hypervisor
 
 import (
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hyperhq/runv/hypervisor/network"
 	"github.com/hyperhq/runv/hypervisor/types"
 
@@ -11,22 +11,20 @@ import (
 func (ctx *VmContext) startSocks() {
 	go waitInitReady(ctx)
 	go waitPts(ctx)
-	if glog.V(1) {
-		go waitConsoleOutput(ctx)
-	}
+	go waitConsoleOutput(ctx)
 }
 
 func (ctx *VmContext) loop() {
 	for ctx.handler != nil {
 		ev, ok := <-ctx.Hub
 		if !ok {
-			glog.Error("hub chan has already been closed")
+			logrus.Error("hub chan has already been closed")
 			break
 		} else if ev == nil {
-			glog.V(1).Info("got nil event.")
+			logrus.Info("got nil event.")
 			continue
 		}
-		glog.V(1).Infof("main event loop got message %d(%s)", ev.Event(), EventString(ev.Event()))
+		logrus.Infof("main event loop got message %d(%s)", ev.Event(), EventString(ev.Event()))
 		ctx.handler(ctx, ev)
 	}
 }
@@ -52,9 +50,7 @@ func VmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *
 func VmAssociate(vmId string, hub chan VmEvent, client chan *types.VmResponse,
 	wg *sync.WaitGroup, pack []byte) {
 
-	if glog.V(1) {
-		glog.Infof("VM %s trying to reload with serialized data: %s", vmId, string(pack))
-	}
+	logrus.Infof("VM %s trying to reload with serialized data: %s", vmId, string(pack))
 
 	pinfo, err := vmDeserialize(pack)
 	if err != nil {
@@ -94,9 +90,7 @@ func VmAssociate(vmId string, hub chan VmEvent, client chan *types.VmResponse,
 
 	go waitPts(context)
 	go connectToInit(context)
-	if glog.V(1) {
-		go waitConsoleOutput(context)
-	}
+	go waitConsoleOutput(context)
 
 	context.Become(stateRunning, "RUNNING")
 

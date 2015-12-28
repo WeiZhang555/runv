@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 )
 
 type MachineState string
@@ -91,9 +91,6 @@ func (m *Machine) Start() error {
 	case Paused:
 		return vbm("controlvm", m.Name, "resume")
 	case Poweroff, Saved, Aborted:
-		if glog.V(4) {
-			return vbm("startvm", m.Name, "--type", "gui")
-		}
 		return vbm("startvm", m.Name, "--type", "headless")
 	}
 	return nil
@@ -148,7 +145,7 @@ func (m *Machine) Stop() error {
 func (m *Machine) Poweroff() error {
 	switch m.State {
 	case Poweroff, Aborted, Saved:
-		glog.Warningf("The machine status is Poweroff, Aborted, Saved")
+		logrus.Warningf("The machine status is Poweroff, Aborted, Saved")
 		return nil
 	}
 	return vbm("controlvm", m.Name, "poweroff")

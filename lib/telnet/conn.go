@@ -13,7 +13,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -122,7 +122,7 @@ func (c *Conn) cmd(cmd byte) error {
 	if err != nil {
 		return err
 	}
-	glog.V(4).Info("received cmd: ", cmd, o)
+	logrus.Info("received cmd: ", cmd, o)
 	switch o {
 	case optEcho:
 		// Accept any echo configuration.
