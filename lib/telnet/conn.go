@@ -122,7 +122,7 @@ func (c *Conn) cmd(cmd byte) error {
 	if err != nil {
 		return err
 	}
-	logrus.Info("received cmd: ", cmd, o)
+	logrus.Info("[RUNV] received cmd: ", cmd, o)
 	switch o {
 	case optEcho:
 		// Accept any echo configuration.

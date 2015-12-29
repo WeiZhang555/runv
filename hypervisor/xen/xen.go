@@ -49,24 +49,24 @@ var globalDriver *XenDriver = nil
 
 func InitDriver() *XenDriver {
 	if probeXend() {
-		logrus.Info("xend is running, can not start with xl.")
+		logrus.Info("[RUNV] xend is running, can not start with xl.")
 		return nil
 	}
 
 	if err := loadXenLib(); err != nil {
-		logrus.Info("Failed to  load xen library")
+		logrus.Info("[RUNV] Failed to  load xen library")
 		return nil
 	}
 
 	ctx, res := HyperxlInitializeDriver()
 	if res != 0 {
-		logrus.Info("failed to initialize xen context")
+		logrus.Info("[RUNV] failed to initialize xen context")
 		return nil
 	} else if ctx.Version < REQUIRED_VERSION {
-		logrus.Infof("Xen version is not new enough (%d), need 4.5 or higher", ctx.Version)
+		logrus.Infof("[RUNV] Xen version is not new enough (%d), need 4.5 or higher", ctx.Version)
 		return nil
 	} else {
-		logrus.Info("Xen capabilities: ", ctx.Capabilities)
+		logrus.Info("[RUNV] Xen capabilities: ", ctx.Capabilities)
 		hvm := false
 		caps := strings.Split(ctx.Capabilities, " ")
 		for _, cap := range caps {
@@ -76,7 +76,7 @@ func InitDriver() *XenDriver {
 			}
 		}
 		if !hvm {
-			logrus.Infof("Xen installation does not support HVM, current capabilities: %s", ctx.Capabilities)
+			logrus.Infof("[RUNV] Xen installation does not support HVM, current capabilities: %s", ctx.Capabilities)
 			return nil
 		}
 	}
@@ -88,7 +88,7 @@ func InitDriver() *XenDriver {
 			if !ok {
 				break
 			}
-			logrus.Info("got SIGCHLD, send msg to libxl")
+			logrus.Info("[RUNV] got SIGCHLD, send msg to libxl")
 			HyperxlSigchldHandler(ctx.Ctx)
 		}
 	}()
@@ -162,7 +162,7 @@ func (xc *XenContext) Launch(ctx *hypervisor.VmContext) {
 	}
 	xc.domId = domid
 	xc.ev = ev
-	logrus.Infof("Start VM as domain %d", domid)
+	logrus.Infof("[RUNV] Start VM as domain %d", domid)
 	xc.driver.domains[(uint32)(domid)] = ctx
 	//    }()
 }
@@ -219,18 +219,18 @@ func (xc *XenContext) AddNic(ctx *hypervisor.VmContext, host *hypervisor.HostNic
 			Address:    guest.Busaddr,
 		}
 
-		logrus.Infof("allocate nic %s for dom %d", host.Mac, xc.domId)
+		logrus.Infof("[RUNV] allocate nic %s for dom %d", host.Mac, xc.domId)
 		hw, err := net.ParseMAC(host.Mac)
 		if err == nil {
 			//dev := fmt.Sprintf("vif%d.%d", xc.domId, guest.Index)
 			dev := host.Device
-			logrus.Infof("add network for %d - ip: %s, br: %s, gw: %s, dev: %s, hw: %s", xc.domId, guest.Ipaddr,
+			logrus.Infof("[RUNV] add network for %d - ip: %s, br: %s, gw: %s, dev: %s, hw: %s", xc.domId, guest.Ipaddr,
 				host.Bridge, host.Bridge, dev, hw.String())
 
 			res := HyperxlNicAdd(xc.driver.Ctx, (uint32)(xc.domId), guest.Ipaddr, host.Bridge, host.Bridge, dev, []byte(hw))
 			if res == 0 {
 
-				logrus.Infof("nic %s insert succeeded", guest.Device)
+				logrus.Infof("[RUNV] nic %s insert succeeded", guest.Device)
 
 				err = network.UpAndAddToBridge(fmt.Sprintf("vif%d.%d", xc.domId, guest.Index))
 				if err != nil {
@@ -245,7 +245,7 @@ func (xc *XenContext) AddNic(ctx *hypervisor.VmContext, host *hypervisor.HostNic
 				ctx.Hub <- callback
 				return
 			}
-			logrus.Infof("nic %s insert succeeded [faked] ", guest.Device)
+			logrus.Infof("[RUNV] nic %s insert succeeded [faked] ", guest.Device)
 			ctx.Hub <- callback
 			return
 		}
@@ -261,7 +261,7 @@ func (xc *XenContext) RemoveNic(ctx *hypervisor.VmContext, device, mac string, c
 	go func() {
 		res := HyperxlNicRemove(xc.driver.Ctx, (uint32)(xc.domId), mac)
 		if res == 0 {
-			logrus.Infof("nic %s remove succeeded", device)
+			logrus.Infof("[RUNV] nic %s remove succeeded", device)
 			ctx.Hub <- callback
 			return
 		}
@@ -303,7 +303,7 @@ func diskRoutine(add bool, xc *XenContext, ctx *hypervisor.VmContext,
 		res = HyperxlDiskRemove(xc.driver.Ctx, uint32(xc.domId), filename, devName, LibxlDiskBackend(backend), LibxlDiskFormat(dfmt))
 	}
 	if res == 0 {
-		logrus.Infof("Disk %s (%s) %s succeeded", devName, filename, op)
+		logrus.Infof("[RUNV] Disk %s (%s) %s succeeded", devName, filename, op)
 		ctx.Hub <- callback
 		return
 	}

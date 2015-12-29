@@ -16,12 +16,12 @@ func watchDog(qc *QemuContext, hub chan hypervisor.VmEvent) {
 		if ok {
 			switch msg {
 			case "quit":
-				logrus.Info("quit watch dog.")
+				logrus.Info("[RUNV] quit watch dog.")
 				return
 			case "kill":
 				success := false
 				if qc.process != nil {
-					logrus.Infof("kill Qemu... %d", qc.process.Pid)
+					logrus.Infof("[RUNV] kill Qemu... %d", qc.process.Pid)
 					if err := qc.process.Kill(); err == nil {
 						success = true
 					}
@@ -32,7 +32,7 @@ func watchDog(qc *QemuContext, hub chan hypervisor.VmEvent) {
 				return
 			}
 		} else {
-			logrus.Info("chan closed, quit watch dog.")
+			logrus.Info("[RUNV] chan closed, quit watch dog.")
 			break
 		}
 	}
@@ -59,7 +59,7 @@ func launchQemu(qc *QemuContext, ctx *hypervisor.VmContext) {
 
 	args := qc.arguments(ctx)
 
-	logrus.Info("cmdline arguments: ", strings.Join(args, " "))
+	logrus.Info("[RUNV] cmdline arguments: ", strings.Join(args, " "))
 
 	pid, err := utils.ExecInDaemon(qemu, append([]string{"qemu-system-x86_64"}, args...))
 	if err != nil {
@@ -69,7 +69,7 @@ func launchQemu(qc *QemuContext, ctx *hypervisor.VmContext) {
 		return
 	}
 
-	logrus.Infof("starting daemon with pid: %d", pid)
+	logrus.Infof("[RUNV] starting daemon with pid: %d", pid)
 
 	err = ctx.DCtx.(*QemuContext).watchPid(int(pid), ctx.Hub)
 	if err != nil {

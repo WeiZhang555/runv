@@ -178,7 +178,7 @@ func (mypod *PodStatus) GetPodIP(vm *Vm) []string {
 	// wait for the VM response
 	for {
 		response = <-Status
-		logrus.Infof("Got response, Code %d, VM id %s!", response.Code, response.VmId)
+		logrus.Infof("[RUNV] Got response, Code %d, VM id %s!", response.Code, response.VmId)
 		if response.Reply != getPodIPEvent {
 			continue
 		}

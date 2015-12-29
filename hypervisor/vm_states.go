@@ -18,7 +18,7 @@ func (ctx *VmContext) timedKill(seconds int) {
 }
 
 func (ctx *VmContext) onVmExit(reclaim bool) bool {
-	logrus.Info("VM has exit...")
+	logrus.Info("[RUNV] VM has exit...")
 	ctx.reportVmShutdown()
 	ctx.setTimeout(60)
 
@@ -48,24 +48,27 @@ func (ctx *VmContext) detachDevice() {
 
 func (ctx *VmContext) prepareDevice(cmd *RunPodCommand) bool {
 	if len(cmd.Spec.Containers) != len(cmd.Containers) {
+		cmdJson, _ := json.Marshal(cmd)
+		logrus.Debugf("---zw I'm here? cmd: %s", string(cmdJson))
 		ctx.reportBadRequest("Spec and Container Info mismatch")
 		return false
 	}
 
+	logrus.Debugf("---zw: prepareDevice initDeviceContext")
 	ctx.InitDeviceContext(cmd.Spec, cmd.Wg, cmd.Containers, cmd.Volumes)
 
 	res, _ := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
-	logrus.Info("initial vm spec: ", string(res))
+	logrus.Info("[RUNV] initial vm spec: ", string(res))
 
 	pendings := ctx.pendingTtys
 	ctx.pendingTtys = []*AttachCommand{}
 	for _, acmd := range pendings {
 		idx := ctx.Lookup(acmd.Container)
 		if idx >= 0 {
-			logrus.Infof("attach pending client %s for %s", acmd.Streams.ClientTag, acmd.Container)
+			logrus.Infof("[RUNV] attach pending client %s for %s", acmd.Streams.ClientTag, acmd.Container)
 			ctx.attachTty2Container(idx, acmd)
 		} else {
-			logrus.Infof("not attach %s for %s", acmd.Streams.ClientTag, acmd.Container)
+			logrus.Infof("[RUNV] not attach %s for %s", acmd.Streams.ClientTag, acmd.Container)
 			ctx.pendingTtys = append(ctx.pendingTtys, acmd)
 		}
 	}
@@ -102,10 +105,10 @@ func (ctx *VmContext) prepareContainer(cmd *NewContainerCommand) *VmContainer {
 	ctx.pendingTtys = []*AttachCommand{}
 	for _, acmd := range pendings {
 		if idx == ctx.Lookup(acmd.Container) {
-			logrus.Infof("attach pending client %s for %s", acmd.Streams.ClientTag, acmd.Container)
+			logrus.Infof("[RUNV] attach pending client %s for %s", acmd.Streams.ClientTag, acmd.Container)
 			ctx.attachTty2Container(idx, acmd)
 		} else {
-			logrus.Infof("not attach %s for %s", acmd.Streams.ClientTag, acmd.Container)
+			logrus.Infof("[RUNV] not attach %s for %s", acmd.Streams.ClientTag, acmd.Container)
 			ctx.pendingTtys = append(ctx.pendingTtys, acmd)
 		}
 	}
@@ -121,15 +124,15 @@ func (ctx *VmContext) newContainer(cmd *NewContainerCommand) {
 		ctx.Hub <- &InitFailedEvent{
 			Reason: "Generated wrong run profile " + err.Error(),
 		}
-		logrus.Infof("INIT_NEWCONTAINER marshal failed")
+		logrus.Infof("[RUNV] INIT_NEWCONTAINER marshal failed")
 		return
 	}
-	logrus.Infof("start sending INIT_NEWCONTAINER")
+	logrus.Infof("[RUNV] start sending INIT_NEWCONTAINER")
 	ctx.vm <- &DecodedMessage{
 		Code:    INIT_NEWCONTAINER,
 		Message: jsonCmd,
 	}
-	logrus.Infof("sent INIT_NEWCONTAINER")
+	logrus.Infof("[RUNV] sent INIT_NEWCONTAINER")
 }
 
 func (ctx *VmContext) setWindowSize(tag string, size *WindowSize) {
@@ -222,9 +225,10 @@ func (ctx *VmContext) killCmd(cmd *KillCommand) {
 
 func (ctx *VmContext) attachCmd(cmd *AttachCommand) {
 	idx := ctx.Lookup(cmd.Container)
+	logrus.Debugf("---attachCmd idx: %d; container: %v", idx, cmd.Container)
 	if cmd.Container != "" && idx < 0 {
 		ctx.pendingTtys = append(ctx.pendingTtys, cmd)
-		logrus.Infof("attachment %s is pending", cmd.Streams.ClientTag)
+		logrus.Infof("[RUNV] attachment %s is pending", cmd.Streams.ClientTag)
 		return
 	} else if idx < 0 || idx > len(ctx.vmSpec.Containers) || ctx.vmSpec.Containers[idx].Tty == 0 {
 		cause := fmt.Sprintf("tty is not configured for %s", cmd.Container)
@@ -247,7 +251,7 @@ func (ctx *VmContext) attachTty2Container(idx int, cmd *AttachCommand) {
 	session := ctx.vmSpec.Containers[idx].Tty
 	ctx.ptys.ptyConnect(ctx, idx, session, cmd.Streams)
 	ctx.clientReg(cmd.Streams.ClientTag, session)
-	logrus.Infof("Connecting tty for %s on session %d", cmd.Container, session)
+	logrus.Infof("[RUNV] Connecting tty for %s on session %d", cmd.Container, session)
 
 	//new stderr session
 	session = ctx.vmSpec.Containers[idx].Stderr
@@ -322,17 +326,17 @@ func commonStateHandler(ctx *VmContext, ev VmEvent, hasPod bool) bool {
 	processed := true
 	switch ev.Event() {
 	case EVENT_VM_EXIT:
-		logrus.Info("Got VM shutdown event, go to cleaning up")
+		logrus.Info("[RUNV] Got VM shutdown event, go to cleaning up")
 		ctx.unsetTimeout()
 		if closed := ctx.onVmExit(hasPod); !closed {
 			ctx.Become(stateDestroying, "DESTROYING")
 		}
 	case ERROR_INTERRUPTED:
-		logrus.Info("Connection interrupted, quit...")
+		logrus.Info("[RUNV] Connection interrupted, quit...")
 		ctx.exitVM(true, "connection to VM broken", false, false)
 		ctx.onVmExit(hasPod)
 	case COMMAND_SHUTDOWN:
-		logrus.Info("got shutdown command, shutting down")
+		logrus.Info("[RUNV] got shutdown command, shutting down")
 		ctx.exitVM(false, "", hasPod, ev.(*ShutdownCommand).Wait)
 	default:
 		processed = false
@@ -379,16 +383,16 @@ func deviceRemoveHandler(ctx *VmContext, ev VmEvent) (bool, bool) {
 	switch ev.Event() {
 	case EVENT_CONTAINER_DELETE:
 		success = ctx.onContainerRemoved(ev.(*ContainerUnmounted))
-		logrus.Info("Unplug container return with ", success)
+		logrus.Info("[RUNV] Unplug container return with ", success)
 	case EVENT_INTERFACE_DELETE:
 		success = ctx.onInterfaceRemoved(ev.(*InterfaceReleased))
-		logrus.Info("Unplug interface return with ", success)
+		logrus.Info("[RUNV] Unplug interface return with ", success)
 	case EVENT_BLOCK_EJECTED:
 		success = ctx.onVolumeRemoved(ev.(*VolumeUnmounted))
-		logrus.Info("Unplug block device return with ", success)
+		logrus.Info("[RUNV] Unplug block device return with ", success)
 	case EVENT_VOLUME_DELETE:
 		success = ctx.onBlockReleased(ev.(*BlockdevRemovedEvent))
-		logrus.Info("release volume return with ", success)
+		logrus.Info("[RUNV] release volume return with ", success)
 	case EVENT_INTERFACE_EJECTED:
 		n := ev.(*NetDevRemovedEvent)
 		nic := ctx.devices.networkMap[n.Index]
@@ -400,7 +404,7 @@ func deviceRemoveHandler(ctx *VmContext, ev VmEvent) (bool, bool) {
 			}
 		}
 
-		logrus.Infof("release %d interface: %s", n.Index, nic.IpAddr)
+		logrus.Infof("[RUNV] release %d interface: %s", n.Index, nic.IpAddr)
 		go ctx.ReleaseInterface(n.Index, nic.IpAddr, nic.Fd, maps)
 	default:
 		processed = false
@@ -457,10 +461,10 @@ func stateInit(ctx *VmContext, ev VmEvent) {
 			ctx.reportVmFault("VM did not start up properly, go to cleaning up")
 			ctx.Close()
 		case EVENT_INIT_CONNECTED:
-			logrus.Info("begin to wait vm commands")
+			logrus.Info("[RUNV] begin to wait vm commands")
 			ctx.reportVmRun()
 		case COMMAND_RELEASE:
-			logrus.Info("no pod on vm, got release, quit.")
+			logrus.Info("[RUNV] no pod on vm, got release, quit.")
 			ctx.shutdownVM(false, "")
 			ctx.Become(stateDestroying, "DESTRYING")
 			ctx.reportVmShutdown()
@@ -478,7 +482,7 @@ func stateInit(ctx *VmContext, ev VmEvent) {
 			cmd := ev.(*WindowSizeCommand)
 			ctx.setWindowSize(cmd.ClientTag, cmd.Size)
 		case COMMAND_RUN_POD, COMMAND_REPLACE_POD:
-			logrus.Info("got spec, prepare devices")
+			logrus.Info("[RUNV] got spec, prepare devices")
 			if ok := ctx.prepareDevice(ev.(*RunPodCommand)); ok {
 				ctx.setTimeout(60)
 				ctx.Become(stateStarting, "STARTING")
@@ -496,7 +500,7 @@ func stateStarting(ctx *VmContext, ev VmEvent) {
 		//processed by common
 	} else if processed := deviceInitHandler(ctx, ev); processed {
 		if ctx.deviceReady() {
-			logrus.Info("device ready, could run pod.")
+			logrus.Info("[RUNV] device ready, could run pod.")
 			ctx.startPod()
 		}
 	} else if processed := initFailureHandler(ctx, ev); processed {
@@ -505,15 +509,15 @@ func stateStarting(ctx *VmContext, ev VmEvent) {
 	} else {
 		switch ev.Event() {
 		case EVENT_VM_START_FAILED:
-			logrus.Info("VM did not start up properly, go to cleaning up")
+			logrus.Info("[RUNV] VM did not start up properly, go to cleaning up")
 			if closed := ctx.onVmExit(true); !closed {
 				ctx.Become(stateDestroying, "DESTROYING")
 			}
 		case EVENT_INIT_CONNECTED:
-			logrus.Info("begin to wait vm commands")
+			logrus.Info("[RUNV] begin to wait vm commands")
 			ctx.reportVmRun()
 		case COMMAND_RELEASE:
-			logrus.Info("pod starting, got release, please wait")
+			logrus.Info("[RUNV] pod starting, got release, please wait")
 			ctx.reportBusy("")
 		case COMMAND_ATTACH:
 			ctx.attachCmd(ev.(*AttachCommand))
@@ -524,7 +528,7 @@ func stateStarting(ctx *VmContext, ev VmEvent) {
 			}
 		case COMMAND_ACK:
 			ack := ev.(*CommandAck)
-			logrus.Infof("[starting] got init ack to %d", ack.reply)
+			logrus.Infof("[RUNV] [starting] got init ack to %d", ack.reply)
 			if ack.reply.Code == INIT_STARTPOD {
 				ctx.unsetTimeout()
 				var pinfo []byte = []byte{}
@@ -537,7 +541,7 @@ func stateStarting(ctx *VmContext, ev VmEvent) {
 				}
 				ctx.reportSuccess("Start POD success", pinfo)
 				ctx.Become(stateRunning, "RUNNING")
-				logrus.Info("pod start success ", string(ack.msg))
+				logrus.Info("[RUNV] pod start success ", string(ack.msg))
 			}
 		case ERROR_CMD_FAIL:
 			ack := ev.(*CommandError)
@@ -569,7 +573,7 @@ func stateRunning(ctx *VmContext, ev VmEvent) {
 			ctx.stopPod()
 			ctx.Become(statePodStopping, "STOPPING")
 		case COMMAND_RELEASE:
-			logrus.Info("pod is running, got release command, let VM fly")
+			logrus.Info("[RUNV] pod is running, got release command, let VM fly")
 			ctx.Become(nil, "NONE")
 			ctx.reportSuccess("", nil)
 		case COMMAND_EXEC:
@@ -597,17 +601,17 @@ func stateRunning(ctx *VmContext, ev VmEvent) {
 			}
 		case COMMAND_ACK:
 			ack := ev.(*CommandAck)
-			logrus.Infof("[running] got init ack to %d", ack.reply)
+			logrus.Infof("[RUNV] [running] got init ack to %d", ack.reply)
 
 			if ack.reply.Code == INIT_EXECCMD {
 				ctx.reportExec(ack.reply.Event, false)
-				logrus.Infof("Get ack for exec cmd")
+				logrus.Infof("[RUNV] Get ack for exec cmd")
 			} else if ack.reply.Code == INIT_READFILE {
 				ctx.reportFile(ack.reply.Event, INIT_READFILE, ack.msg, false)
-				logrus.Infof("Get ack for read data: %s", string(ack.msg))
+				logrus.Infof("[RUNV] Get ack for read data: %s", string(ack.msg))
 			} else if ack.reply.Code == INIT_WRITEFILE {
 				ctx.reportFile(ack.reply.Event, INIT_WRITEFILE, ack.msg, false)
-				logrus.Infof("Get ack for write data: %s", string(ack.msg))
+				logrus.Infof("[RUNV] Get ack for write data: %s", string(ack.msg))
 			}
 		case ERROR_CMD_FAIL:
 			ack := ev.(*CommandError)
@@ -615,13 +619,13 @@ func stateRunning(ctx *VmContext, ev VmEvent) {
 				cmd := ack.reply.Event.(*ExecCommand)
 				ctx.ptys.Close(ctx, cmd.Sequence)
 				ctx.reportExec(ack.reply.Event, true)
-				logrus.Infof("Exec command %s on session %d failed", cmd.Command[0], cmd.Sequence)
+				logrus.Infof("[RUNV] Exec command %s on session %d failed", cmd.Command[0], cmd.Sequence)
 			} else if ack.reply.Code == INIT_READFILE {
 				ctx.reportFile(ack.reply.Event, INIT_READFILE, ack.msg, true)
-				logrus.Infof("Get error for read data: %s", string(ack.msg))
+				logrus.Infof("[RUNV] Get error for read data: %s", string(ack.msg))
 			} else if ack.reply.Code == INIT_WRITEFILE {
 				ctx.reportFile(ack.reply.Event, INIT_WRITEFILE, ack.msg, true)
-				logrus.Infof("Get error for write data: %s", string(ack.msg))
+				logrus.Infof("[RUNV] Get error for write data: %s", string(ack.msg))
 			}
 
 		case COMMAND_GET_POD_IP:
@@ -637,20 +641,20 @@ func statePodStopping(ctx *VmContext, ev VmEvent) {
 	} else {
 		switch ev.Event() {
 		case COMMAND_RELEASE:
-			logrus.Info("pod stopping, got release, quit.")
+			logrus.Info("[RUNV] pod stopping, got release, quit.")
 			ctx.unsetTimeout()
 			ctx.shutdownVM(false, "got release, quit")
 			ctx.Become(stateTerminating, "TERMINATING")
 			ctx.reportVmShutdown()
 		case EVENT_POD_FINISH:
-			logrus.Info("POD stopped")
+			logrus.Info("[RUNV] POD stopped")
 			ctx.detachDevice()
 			ctx.Become(stateCleaning, "CLEANING")
 		case COMMAND_ACK:
 			ack := ev.(*CommandAck)
-			logrus.Infof("[Stopping] got init ack to %d", ack.reply.Code)
+			logrus.Infof("[RUNV] [Stopping] got init ack to %d", ack.reply.Code)
 			if ack.reply.Code == INIT_STOPPOD {
-				logrus.Info("POD stopped ", string(ack.msg))
+				logrus.Info("[RUNV] POD stopped ", string(ack.msg))
 				ctx.detachDevice()
 				ctx.Become(stateCleaning, "CLEANING")
 			}
@@ -676,25 +680,25 @@ func statePodStopping(ctx *VmContext, ev VmEvent) {
 func stateTerminating(ctx *VmContext, ev VmEvent) {
 	switch ev.Event() {
 	case EVENT_VM_EXIT:
-		logrus.Info("Got VM shutdown event while terminating, go to cleaning up")
+		logrus.Info("[RUNV] Got VM shutdown event while terminating, go to cleaning up")
 		ctx.unsetTimeout()
 		if closed := ctx.onVmExit(true); !closed {
 			ctx.Become(stateDestroying, "DESTROYING")
 		}
 	case EVENT_VM_KILL:
-		logrus.Info("Got VM force killed message, go to cleaning up")
+		logrus.Info("[RUNV] Got VM force killed message, go to cleaning up")
 		ctx.unsetTimeout()
 		if closed := ctx.onVmExit(true); !closed {
 			ctx.Become(stateDestroying, "DESTROYING")
 		}
 	case COMMAND_RELEASE:
-		logrus.Info("vm terminating, got release")
+		logrus.Info("[RUNV] vm terminating, got release")
 		ctx.reportVmShutdown()
 	case COMMAND_ACK:
 		ack := ev.(*CommandAck)
-		logrus.Infof("[Terminating] Got reply to %d: '%s'", ack.reply, string(ack.msg))
+		logrus.Infof("[RUNV] [Terminating] Got reply to %d: '%s'", ack.reply, string(ack.msg))
 		if ack.reply.Code == INIT_DESTROYPOD {
-			logrus.Info("POD destroyed ", string(ack.msg))
+			logrus.Info("[RUNV] POD destroyed ", string(ack.msg))
 			ctx.poweroffVM(false, "")
 		}
 	case ERROR_CMD_FAIL:
@@ -707,7 +711,7 @@ func stateTerminating(ctx *VmContext, ev VmEvent) {
 		logrus.Warning("VM did not exit in time, try to stop it")
 		ctx.poweroffVM(true, "vm terminating timeout")
 	case ERROR_INTERRUPTED:
-		logrus.Info("Connection interrupted while terminating")
+		logrus.Info("[RUNV] Connection interrupted while terminating")
 	default:
 		unexpectedEventHandler(ctx, ev, "terminating")
 	}
@@ -724,13 +728,13 @@ func stateCleaning(ctx *VmContext, ev VmEvent) {
 			//            ctx.reset()
 			//            ctx.unsetTimeout()
 			//            ctx.reportPodStopped()
-			//            logrus.Info("device ready, could run pod.")
+			//            logrus.Info("[RUNV] device ready, could run pod.")
 			//            ctx.Become(stateInit, "INIT")
 			ctx.vm <- &DecodedMessage{
 				Code:    INIT_READY,
 				Message: []byte{},
 			}
-			logrus.Info("device ready, could run pod.")
+			logrus.Info("[RUNV] device ready, could run pod.")
 		}
 	} else if processed := initFailureHandler(ctx, ev); processed {
 		ctx.poweroffVM(true, "fail to unplug devices")
@@ -738,7 +742,7 @@ func stateCleaning(ctx *VmContext, ev VmEvent) {
 	} else {
 		switch ev.Event() {
 		case COMMAND_RELEASE:
-			logrus.Info("vm cleaning to idle, got release, quit")
+			logrus.Info("[RUNV] vm cleaning to idle, got release, quit")
 			ctx.reportVmShutdown()
 			ctx.Become(stateDestroying, "DESTROYING")
 		case EVENT_VM_TIMEOUT:
@@ -747,12 +751,12 @@ func stateCleaning(ctx *VmContext, ev VmEvent) {
 			ctx.Become(stateDestroying, "DESTROYING")
 		case COMMAND_ACK:
 			ack := ev.(*CommandAck)
-			logrus.Infof("[cleaning] Got reply to %d: '%s'", ack.reply.Code, string(ack.msg))
+			logrus.Infof("[RUNV] [cleaning] Got reply to %d: '%s'", ack.reply.Code, string(ack.msg))
 			if ack.reply.Code == INIT_READY {
 				ctx.reset()
 				ctx.unsetTimeout()
 				ctx.reportPodStopped()
-				logrus.Info("init has been acknowledged, could run pod.")
+				logrus.Info("[RUNV] init has been acknowledged, could run pod.")
 				ctx.Become(stateInit, "INIT")
 			}
 		default:
@@ -764,29 +768,29 @@ func stateCleaning(ctx *VmContext, ev VmEvent) {
 func stateDestroying(ctx *VmContext, ev VmEvent) {
 	if processed, _ := deviceRemoveHandler(ctx, ev); processed {
 		if closed := ctx.tryClose(); closed {
-			logrus.Info("resources reclaimed, quit...")
+			logrus.Info("[RUNV] resources reclaimed, quit...")
 		}
 	} else {
 		switch ev.Event() {
 		case EVENT_VM_EXIT:
-			logrus.Info("Got VM shutdown event")
+			logrus.Info("[RUNV] Got VM shutdown event")
 			ctx.unsetTimeout()
 			if closed := ctx.onVmExit(false); closed {
-				logrus.Info("VM Context closed.")
+				logrus.Info("[RUNV] VM Context closed.")
 			}
 		case EVENT_VM_KILL:
-			logrus.Info("Got VM force killed message")
+			logrus.Info("[RUNV] Got VM force killed message")
 			ctx.unsetTimeout()
 			if closed := ctx.onVmExit(true); closed {
-				logrus.Info("VM Context closed.")
+				logrus.Info("[RUNV] VM Context closed.")
 			}
 		case ERROR_INTERRUPTED:
-			logrus.Info("Connection interrupted while destroying")
+			logrus.Info("[RUNV] Connection interrupted while destroying")
 		case COMMAND_RELEASE:
-			logrus.Info("vm destroying, got release")
+			logrus.Info("[RUNV] vm destroying, got release")
 			ctx.reportVmShutdown()
 		case EVENT_VM_TIMEOUT:
-			logrus.Info("Device removing timeout")
+			logrus.Info("[RUNV] Device removing timeout")
 			ctx.Close()
 		default:
 			unexpectedEventHandler(ctx, ev, "vm cleaning up")

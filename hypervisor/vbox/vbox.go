@@ -235,7 +235,7 @@ func (vc *VBoxContext) AddDisk(ctx *hypervisor.VmContext, name, sourceType, file
 	//	go func() {
 	/*
 		if sourceType != "vdi" {
-			logrus.Infof("Disk %s (%s) add failed, unsupported source type", name, filename)
+			logrus.Infof("[RUNV] Disk %s (%s) add failed, unsupported source type", name, filename)
 			ctx.Hub <- &hypervisor.DeviceFailed{
 				Session: nil,
 			}
@@ -270,7 +270,7 @@ func (vc *VBoxContext) AddDisk(ctx *hypervisor.VmContext, name, sourceType, file
 		ScsiId:     id,
 	}
 
-	logrus.Infof("Disk %s (%s) add succeeded", name, filename)
+	logrus.Infof("[RUNV] Disk %s (%s) add succeeded", name, filename)
 	ctx.Hub <- callback
 	return
 	//	}()
@@ -291,7 +291,7 @@ func (vc *VBoxContext) RemoveDisk(ctx *hypervisor.VmContext, filename, format st
 		*/
 	}
 
-	logrus.Infof("Disk %s remove succeeded", filename)
+	logrus.Infof("[RUNV] Disk %s remove succeeded", filename)
 	ctx.Hub <- callback
 	return
 	//	}()
@@ -343,7 +343,7 @@ func (vc *VBoxContext) AddNic(ctx *hypervisor.VmContext, host *hypervisor.HostNi
 				return
 			}
 		*/
-		logrus.Infof("nic %s insert succeeded", guest.Device)
+		logrus.Infof("[RUNV] nic %s insert succeeded", guest.Device)
 		ctx.Hub <- callback
 		return
 	}()
@@ -361,7 +361,7 @@ func (vc *VBoxContext) RemoveNic(ctx *hypervisor.VmContext, device, mac string, 
 				return
 			}
 		*/
-		logrus.Infof("nic %s remove succeeded", device)
+		logrus.Infof("[RUNV] nic %s remove succeeded", device)
 		ctx.Hub <- callback
 		return
 	}()

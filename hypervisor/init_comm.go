@@ -30,14 +30,14 @@ func waitConsoleOutput(ctx *VmContext) {
 		return
 	}
 
-	logrus.Info("connected to ", ctx.ConsoleSockName)
+	logrus.Info("[RUNV] connected to ", ctx.ConsoleSockName)
 
 	tc, err := telnet.NewConn(conn)
 	if err != nil {
 		logrus.Error("fail to init telnet connection to ", ctx.ConsoleSockName, ": ", err.Error())
 		return
 	}
-	logrus.Infof("connected %s as telnet mode.", ctx.ConsoleSockName)
+	logrus.Infof("[RUNV] connected %s as telnet mode.", ctx.ConsoleSockName)
 
 	cout := make(chan string, 128)
 	go TtyLiner(tc, cout)
@@ -45,9 +45,9 @@ func waitConsoleOutput(ctx *VmContext) {
 	for {
 		line, ok := <-cout
 		if ok {
-			logrus.Info("[console] ", line)
+			logrus.Info("[RUNV] [console] ", line)
 		} else {
-			logrus.Info("console output end")
+			logrus.Info("[RUNV] console output end")
 			break
 		}
 	}
@@ -73,7 +73,7 @@ func ReadVmMessage(conn *net.UnixConn) (*DecodedMessage, error) {
 		if want > 512 {
 			want = 512
 		}
-		logrus.Infof("trying to read %d bytes", want)
+		logrus.Infof("[RUNV] trying to read %d bytes", want)
 		nr, err := conn.Read(buf[:want])
 		if err != nil {
 			logrus.Error("read init data failed")
@@ -83,11 +83,11 @@ func ReadVmMessage(conn *net.UnixConn) (*DecodedMessage, error) {
 		res = append(res, buf[:nr]...)
 		read = read + nr
 
-		logrus.Infof("read %d/%d [length = %d]", read, needRead, length)
+		logrus.Infof("[RUNV] read %d/%d [length = %d]", read, needRead, length)
 
 		if length == 0 && read >= 8 {
 			length = int(binary.BigEndian.Uint32(res[4:8]))
-			logrus.Infof("data length is %d", length)
+			logrus.Infof("[RUNV] data length is %d", length)
 			if length > 8 {
 				needRead = length
 			}
@@ -110,7 +110,7 @@ func waitInitReady(ctx *VmContext) {
 		return
 	}
 
-	logrus.Info("Wating for init messages...")
+	logrus.Info("[RUNV] Wating for init messages...")
 
 	msg, err := ReadVmMessage(conn.(*net.UnixConn))
 	if err != nil {
@@ -120,7 +120,7 @@ func waitInitReady(ctx *VmContext) {
 		}
 		conn.Close()
 	} else if msg.Code == INIT_READY {
-		logrus.Info("Get init ready message")
+		logrus.Info("[RUNV] Get init ready message")
 		ctx.Hub <- &InitConnectedEvent{conn: conn.(*net.UnixConn)}
 		go waitCmdToInit(ctx, conn.(*net.UnixConn))
 	} else {
@@ -161,14 +161,14 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
 	for looping {
 		cmd, ok := <-ctx.vm
 		if !ok {
-			logrus.Info("vm channel closed, quit")
+			logrus.Info("[RUNV] vm channel closed, quit")
 			break
 		}
-		logrus.Infof("got cmd:%d", cmd.Code)
+		logrus.Infof("[RUNV] got cmd:%d", cmd.Code)
 		if cmd.Code == INIT_ACK || cmd.Code == INIT_ERROR {
 			if len(cmds) > 0 {
 				if cmds[0].Code == INIT_DESTROYPOD {
-					logrus.Info("got response of shutdown command, last round of command to init")
+					logrus.Info("[RUNV] got response of shutdown command, last round of command to init")
 					looping = false
 				}
 				if cmd.Code == INIT_ACK {
@@ -187,14 +187,14 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
 				cmds = cmds[1:]
 
 				if pongTimer != nil {
-					logrus.Info("ack got, clear pong timer")
+					logrus.Info("[RUNV] ack got, clear pong timer")
 					pongTimer.Stop()
 					pongTimer = nil
 				}
 				if pingTimer == nil {
 					pingTimer = time.AfterFunc(30*time.Second, func() {
 						defer func() { recover() }()
-						logrus.Info("Send ping message to init")
+						logrus.Info("[RUNV] Send ping message to init")
 						ctx.vm <- &DecodedMessage{
 							Code:    INIT_PING,
 							Message: []byte{},
@@ -216,7 +216,7 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
 
 			for _, c := range cmds {
 				if c.Code == INIT_DESTROYPOD {
-					logrus.Info("got pod finish message after having send destroy message")
+					logrus.Info("[RUNV] got pod finish message after having send destroy message")
 					looping = false
 					ctx.Hub <- &CommandAck{
 						reply: c,
@@ -225,17 +225,17 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
 				}
 			}
 
-			logrus.Infof("Pod finished, returned %d values", num)
+			logrus.Infof("[RUNV] Pod finished, returned %d values", num)
 
 			ctx.Hub <- &PodFinished{
 				result: results,
 			}
 		} else {
 			if cmd.Code == INIT_NEXT {
-				logrus.Infof("get command NEXT")
+				logrus.Infof("[RUNV] get command NEXT")
 
 				got += int(binary.BigEndian.Uint32(cmd.Message[0:4]))
-				logrus.Infof("send %d, receive %d", index, got)
+				logrus.Infof("[RUNV] send %d, receive %d", index, got)
 				timeout = false
 				if index == got {
 					/* received the sent out message */
@@ -245,7 +245,7 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
 					got = 0
 				}
 			} else {
-				logrus.Infof("send command %d to init, payload: '%s'.", cmd.Code, string(cmd.Message))
+				logrus.Infof("[RUNV] send command %d to init, payload: '%s'.", cmd.Code, string(cmd.Message))
 				cmds = append(cmds, cmd)
 				data = append(data, NewVmMessage(cmd)...)
 				timeout = true
@@ -258,12 +258,12 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
 				}
 
 				wrote, _ := init.Write(data[:end])
-				logrus.Infof("write %d to init, payload: '%s'.", wrote, data[:end])
+				logrus.Infof("[RUNV] write %d to init, payload: '%s'.", wrote, data[:end])
 				index += wrote
 			}
 
 			if timeout && pongTimer == nil {
-				logrus.Info("message sent, set pong timer")
+				logrus.Info("[RUNV] message sent, set pong timer")
 				pongTimer = time.AfterFunc(30*time.Second, func() {
 					ctx.Hub <- &Interrupted{Reason: "init not reply ping mesg"}
 				})

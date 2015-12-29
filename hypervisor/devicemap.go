@@ -87,7 +87,7 @@ func (pm *processingMap) isEmpty() bool {
 func (ctx *VmContext) deviceReady() bool {
 	ready := ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
 	if ready && ctx.wait {
-		logrus.Info("All resource being released, someone is waiting for us...")
+		logrus.Info("[RUNV] All resource being released, someone is waiting for us...")
 		ctx.wg.Done()
 		ctx.wait = false
 	}
@@ -211,7 +211,7 @@ func (ctx *VmContext) initVolumeMap(spec *pod.UserPod) {
 				vol.Source += ";" + monitor
 			}
 
-			logrus.Infof("volume %s, Source %s", vol.Name, vol.Source)
+			logrus.Infof("[RUNV] volume %s, Source %s", vol.Name, vol.Source)
 			ctx.devices.volumeMap[vol.Name] = &volumeInfo{
 				info: &blockDescriptor{
 					name: vol.Name, filename: vol.Source, format: vol.Driver, fstype: "ext4", deviceName: ""},
@@ -239,7 +239,7 @@ func (ctx *VmContext) setVolumeInfo(info *VolumeInfo) {
 	} else {
 		vol.info.fstype = ""
 		for i, mount := range vol.pos {
-			logrus.Infof("insert volume %s to %s on %d", info.Name, mount, i)
+			logrus.Infof("[RUNV] insert volume %s to %s on %d", info.Name, mount, i)
 			ctx.vmSpec.Containers[i].Fsmap = append(ctx.vmSpec.Containers[i].Fsmap, VmFsmapDescriptor{
 				Source:   info.Filepath,
 				Path:     mount,
@@ -367,13 +367,13 @@ func (ctx *VmContext) onContainerRemoved(c *ContainerUnmounted) bool {
 	defer ctx.lock.Unlock()
 
 	if _, ok := ctx.progress.deleting.containers[c.Index]; ok {
-		logrus.Infof("container %d umounted", c.Index)
+		logrus.Infof("[RUNV] container %d umounted", c.Index)
 		delete(ctx.progress.deleting.containers, c.Index)
 	}
 	if ctx.vmSpec.Containers[c.Index].Fstype != "" {
 		for name, image := range ctx.devices.imageMap {
 			if image.pos == c.Index {
-				logrus.Info("need remove image dm file", image.info.filename)
+				logrus.Info("[RUNV] need remove image dm file", image.info.filename)
 				ctx.progress.deleting.blockdevs[name] = true
 				go UmountDMDevice(image.info.filename, name, ctx.Hub)
 			}
@@ -385,7 +385,7 @@ func (ctx *VmContext) onContainerRemoved(c *ContainerUnmounted) bool {
 
 func (ctx *VmContext) onInterfaceRemoved(nic *InterfaceReleased) bool {
 	if _, ok := ctx.progress.deleting.networks[nic.Index]; ok {
-		logrus.Infof("interface %d released", nic.Index)
+		logrus.Infof("[RUNV] interface %d released", nic.Index)
 		delete(ctx.progress.deleting.networks, nic.Index)
 	}
 
@@ -394,12 +394,12 @@ func (ctx *VmContext) onInterfaceRemoved(nic *InterfaceReleased) bool {
 
 func (ctx *VmContext) onVolumeRemoved(v *VolumeUnmounted) bool {
 	if _, ok := ctx.progress.deleting.volumes[v.Name]; ok {
-		logrus.Infof("volume %s umounted", v.Name)
+		logrus.Infof("[RUNV] volume %s umounted", v.Name)
 		delete(ctx.progress.deleting.volumes, v.Name)
 	}
 	vol := ctx.devices.volumeMap[v.Name]
 	if vol.info.fstype != "" {
-		logrus.Info("need remove dm file ", vol.info.filename)
+		logrus.Info("[RUNV] need remove dm file ", vol.info.filename)
 		ctx.progress.deleting.blockdevs[vol.info.name] = true
 		go UmountDMDevice(vol.info.filename, vol.info.name, ctx.Hub)
 	}
@@ -408,7 +408,7 @@ func (ctx *VmContext) onVolumeRemoved(v *VolumeUnmounted) bool {
 
 func (ctx *VmContext) onBlockReleased(v *BlockdevRemovedEvent) bool {
 	if _, ok := ctx.progress.deleting.blockdevs[v.Name]; ok {
-		logrus.Infof("blockdev %s deleted", v.Name)
+		logrus.Infof("[RUNV] blockdev %s deleted", v.Name)
 		delete(ctx.progress.deleting.blockdevs, v.Name)
 	}
 	return v.Success
@@ -417,7 +417,7 @@ func (ctx *VmContext) onBlockReleased(v *BlockdevRemovedEvent) bool {
 func (ctx *VmContext) releaseVolumeDir() {
 	for name, vol := range ctx.devices.volumeMap {
 		if vol.info.fstype == "" {
-			logrus.Info("need umount dir ", vol.info.filename)
+			logrus.Info("[RUNV] need umount dir ", vol.info.filename)
 			ctx.progress.deleting.volumes[name] = true
 			go UmountVolume(ctx.ShareDir, vol.info.filename, name, ctx.Hub)
 		}
@@ -427,14 +427,14 @@ func (ctx *VmContext) releaseVolumeDir() {
 func (ctx *VmContext) removeDMDevice() {
 	for name, container := range ctx.devices.imageMap {
 		if container.info.fstype != "dir" {
-			logrus.Info("need remove dm file", container.info.filename)
+			logrus.Info("[RUNV] need remove dm file", container.info.filename)
 			ctx.progress.deleting.blockdevs[name] = true
 			go UmountDMDevice(container.info.filename, name, ctx.Hub)
 		}
 	}
 	for name, vol := range ctx.devices.volumeMap {
 		if vol.info.fstype != "" {
-			logrus.Info("need remove dm file ", vol.info.filename)
+			logrus.Info("[RUNV] need remove dm file ", vol.info.filename)
 			ctx.progress.deleting.blockdevs[name] = true
 			go UmountDMDevice(vol.info.filename, name, ctx.Hub)
 		}
@@ -447,7 +447,7 @@ func (ctx *VmContext) releaseOverlayDir() {
 	}
 	for idx, container := range ctx.vmSpec.Containers {
 		if container.Fstype == "" {
-			logrus.Info("need unmount overlay dir ", container.Image)
+			logrus.Info("[RUNV] need unmount overlay dir ", container.Image)
 			ctx.progress.deleting.containers[idx] = true
 			go UmountOverlayContainer(ctx.ShareDir, container.Image, idx, ctx.Hub)
 		}
@@ -460,7 +460,7 @@ func (ctx *VmContext) releaseAufsDir() {
 	}
 	for idx, container := range ctx.vmSpec.Containers {
 		if container.Fstype == "" {
-			logrus.Info("need unmount aufs ", container.Image)
+			logrus.Info("[RUNV] need unmount aufs ", container.Image)
 			ctx.progress.deleting.containers[idx] = true
 			go UmountAufsContainer(ctx.ShareDir, container.Image, idx, ctx.Hub)
 		}
@@ -470,7 +470,7 @@ func (ctx *VmContext) releaseAufsDir() {
 func (ctx *VmContext) removeVolumeDrive() {
 	for name, vol := range ctx.devices.volumeMap {
 		if vol.info.format == "raw" || vol.info.format == "qcow2" || vol.info.format == "vdi" || vol.info.format == "rbd" {
-			logrus.Infof("need detach volume %s (%s) ", name, vol.info.deviceName)
+			logrus.Infof("[RUNV] need detach volume %s (%s) ", name, vol.info.deviceName)
 			ctx.DCtx.RemoveDisk(ctx, vol.info.filename, vol.info.format, vol.info.scsiId, &VolumeUnmounted{Name: name, Success: true})
 			ctx.progress.deleting.volumes[name] = true
 		}
@@ -480,7 +480,7 @@ func (ctx *VmContext) removeVolumeDrive() {
 func (ctx *VmContext) removeImageDrive() {
 	for _, image := range ctx.devices.imageMap {
 		if image.info.fstype != "dir" {
-			logrus.Infof("need eject no.%d image block device: %s", image.pos, image.info.deviceName)
+			logrus.Infof("[RUNV] need eject no.%d image block device: %s", image.pos, image.info.deviceName)
 			ctx.progress.deleting.containers[image.pos] = true
 			ctx.DCtx.RemoveDisk(ctx, image.info.filename, image.info.format, image.info.scsiId, &ContainerUnmounted{Index: image.pos, Success: true})
 		}
@@ -497,7 +497,7 @@ func (ctx *VmContext) releaseNetwork() {
 	}
 
 	for idx, nic := range ctx.devices.networkMap {
-		logrus.Infof("remove network card %d: %s", idx, nic.IpAddr)
+		logrus.Infof("[RUNV] remove network card %d: %s", idx, nic.IpAddr)
 		ctx.progress.deleting.networks[idx] = true
 		go ctx.ReleaseInterface(idx, nic.IpAddr, nic.Fd, maps)
 		maps = nil
@@ -514,7 +514,7 @@ func (ctx *VmContext) removeInterface() {
 	}
 
 	for idx, nic := range ctx.devices.networkMap {
-		logrus.Infof("remove network card %d: %s", idx, nic.IpAddr)
+		logrus.Infof("[RUNV] remove network card %d: %s", idx, nic.IpAddr)
 		ctx.progress.deleting.networks[idx] = true
 		ctx.DCtx.RemoveNic(ctx, nic.DeviceName, nic.MacAddr, &NetDevRemovedEvent{Index: idx})
 		maps = nil

@@ -127,7 +127,7 @@ func (qc *QemuContext) Kill(ctx *hypervisor.VmContext) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			logrus.Info("kill qemu, but channel has already been closed")
+			logrus.Info("[RUNV] kill qemu, but channel has already been closed")
 		}
 	}()
 	qc.wdt <- "kill"
@@ -175,7 +175,7 @@ func (qc *QemuContext) arguments(ctx *hypervisor.VmContext) []string {
 	params := []string{
 		"-machine", "pc-i440fx-2.0,accel=kvm,usb=off", "-global", "kvm-pit.lost_tick_policy=discard", "-cpu", "host"}
 	if _, err := os.Stat("/dev/kvm"); os.IsNotExist(err) {
-		logrus.Info("kvm not exist change to no kvm mode")
+		logrus.Info("[RUNV] kvm not exist change to no kvm mode")
 		params = []string{"-machine", "pc-i440fx-2.0,usb=off", "-cpu", "core2duo"}
 	}
 

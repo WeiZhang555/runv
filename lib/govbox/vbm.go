@@ -39,7 +39,7 @@ var (
 
 func vbm(args ...string) error {
 	cmd := exec.Command(VBM, args...)
-	logrus.Infof("executing: %v %v", VBM, strings.Join(args, " "))
+	logrus.Infof("[RUNV] executing: %v %v", VBM, strings.Join(args, " "))
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -54,7 +54,7 @@ func vbm(args ...string) error {
 
 func vbmOut(args ...string) (string, error) {
 	cmd := exec.Command(VBM, args...)
-	logrus.Infof("executing: %v %v", VBM, strings.Join(args, " "))
+	logrus.Infof("[RUNV] executing: %v %v", VBM, strings.Join(args, " "))
 
 	b, err := cmd.Output()
 	if err != nil {
@@ -67,7 +67,7 @@ func vbmOut(args ...string) (string, error) {
 
 func vbmOutErr(args ...string) (string, string, error) {
 	cmd := exec.Command(VBM, args...)
-	logrus.Infof("executing: %v %v", VBM, strings.Join(args, " "))
+	logrus.Infof("[RUNV] executing: %v %v", VBM, strings.Join(args, " "))
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

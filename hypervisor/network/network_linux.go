@@ -147,7 +147,7 @@ func setupIPTables(addr net.Addr) error {
 
 	err := Modprobe("br_netfilter")
 	if err != nil {
-		logrus.Infof("modprobe br_netfilter failed %s", err)
+		logrus.Infof("[RUNV] modprobe br_netfilter failed %s", err)
 	}
 
 	file, err := os.OpenFile("/proc/sys/net/bridge/bridge-nf-call-iptables",
@@ -213,12 +213,12 @@ func InitNetwork(bIface, bIP string, disable bool) error {
 
 	disableIptables = disable
 	if disableIptables {
-		logrus.Info("Iptables is disabled")
+		logrus.Info("[RUNV] Iptables is disabled")
 	}
 
 	addr, err := GetIfaceAddr(BridgeIface)
 	if err != nil {
-		logrus.Infof("create bridge %s, ip %s", BridgeIface, BridgeIP)
+		logrus.Infof("[RUNV] create bridge %s, ip %s", BridgeIface, BridgeIP)
 		// No Bridge existent, create one
 
 		// If the iface is not found, try to create it
@@ -235,7 +235,7 @@ func InitNetwork(bIface, bIP string, disable bool) error {
 
 		BridgeIPv4Net = addr.(*net.IPNet)
 	} else {
-		logrus.Info("bridge exist")
+		logrus.Info("[RUNV] bridge exist")
 		// Validate that the bridge ip matches the ip specified by BridgeIP
 		BridgeIPv4Net = addr.(*net.IPNet)
 
@@ -334,7 +334,7 @@ func configureBridge(bridgeIP, bridgeIface string) error {
 		return err
 	}
 
-	logrus.Infof("Allocate IP Address %s for bridge %s", ipAddr, bridgeIface)
+	logrus.Infof("[RUNV] Allocate IP Address %s for bridge %s", ipAddr, bridgeIface)
 
 	if err := NetworkLinkAddIp(iface, ipAddr, ipNet); err != nil {
 		return fmt.Errorf("Unable to add private network: %s", err)
@@ -485,7 +485,7 @@ func newIfAddrmsg(family int) *IfAddrmsg {
 func (msg *IfAddrmsg) ToWireFormat() []byte {
 
 	length := syscall.SizeofIfAddrmsg
-	logrus.Infof("ifaddmsg length %d", length)
+	logrus.Infof("[RUNV] ifaddmsg length %d", length)
 	b := make([]byte, length)
 	b[0] = msg.Family
 	b[1] = msg.Prefixlen
@@ -869,7 +869,7 @@ func ReleasePortMaps(containerip string, maps []pod.UserContainerPort) error {
 	}
 
 	for _, m := range maps {
-		logrus.Infof("release port map %d", m.HostPort)
+		logrus.Infof("[RUNV] release port map %d", m.HostPort)
 		err := PortMapper.ReleaseMap(m.Protocol, m.HostPort)
 		if err != nil {
 			continue

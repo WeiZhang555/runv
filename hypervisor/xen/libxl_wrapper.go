@@ -946,9 +946,9 @@ func LibxlCtxFree(ctx LibxlCtxPtr) int {
 func DomainDeath_cgo(domid C.uint32_t) {
 	defer func() { recover() }() //in case the vmContext or channel has been released
 	dom := (uint32)(domid)
-	logrus.Infof("got xen hypervisor message: domain %d quit", dom)
+	logrus.Infof("[RUNV] got xen hypervisor message: domain %d quit", dom)
 	if vm, ok := globalDriver.domains[dom]; ok {
-		logrus.Infof("Domain %d managed by xen driver, try close it")
+		logrus.Infof("[RUNV] Domain %d managed by xen driver, try close it")
 		delete(globalDriver.domains, dom)
 		vm.Hub <- &hypervisor.VmExit{}
 		HyperDomainCleanup(globalDriver.Ctx, vm.DCtx.(*XenContext).ev)
@@ -958,6 +958,6 @@ func DomainDeath_cgo(domid C.uint32_t) {
 //export hyperxl_log_cgo
 func hyperxl_log_cgo(msg *C.char, len C.int) {
 	if logrus {
-		logrus.Info("[libxl] ", C.GoStringN(msg, len))
+		logrus.Info("[RUNV] [libxl] ", C.GoStringN(msg, len))
 	}
 }

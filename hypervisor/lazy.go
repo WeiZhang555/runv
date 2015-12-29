@@ -10,7 +10,7 @@ import (
 
 func LazyVmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *BootConfig, keep int) {
 
-	logrus.Infof("Start VM %s in lazy mode, not started yet actually", vmId)
+	logrus.Infof("[RUNV] Start VM %s in lazy mode, not started yet actually", vmId)
 
 	context, err := InitContext(vmId, hub, client, nil, boot, keep)
 	if err != nil {
@@ -47,9 +47,9 @@ func LazyVmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, bo
 func statePreparing(ctx *VmContext, ev VmEvent) {
 	switch ev.Event() {
 	case EVENT_VM_EXIT, ERROR_INTERRUPTED:
-		logrus.Info("VM exited before start...")
+		logrus.Info("[RUNV] VM exited before start...")
 	case COMMAND_SHUTDOWN, COMMAND_RELEASE:
-		logrus.Info("got shutdown or release command, not started yet")
+		logrus.Info("[RUNV] got shutdown or release command, not started yet")
 		ctx.reportVmShutdown()
 		ctx.Become(nil, "NONE")
 	case COMMAND_EXEC:
@@ -58,7 +58,7 @@ func statePreparing(ctx *VmContext, ev VmEvent) {
 		cmd := ev.(*WindowSizeCommand)
 		ctx.setWindowSize(cmd.ClientTag, cmd.Size)
 	case COMMAND_RUN_POD, COMMAND_REPLACE_POD:
-		logrus.Info("got spec, prepare devices")
+		logrus.Info("[RUNV] got spec, prepare devices")
 		if ok := ctx.lazyPrepareDevice(ev.(*RunPodCommand)); ok {
 			ctx.startSocks()
 			ctx.DCtx.(LazyDriverContext).LazyLaunch(ctx)
@@ -83,7 +83,7 @@ func (ctx *VmContext) lazyPrepareDevice(cmd *RunPodCommand) bool {
 	ctx.InitDeviceContext(cmd.Spec, cmd.Wg, cmd.Containers, cmd.Volumes)
 
 	res, _ := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
-	logrus.Info("initial vm spec: ", string(res))
+	logrus.Info("[RUNV] initial vm spec: ", string(res))
 
 	err := ctx.lazyAllocateNetworks()
 	if err != nil {

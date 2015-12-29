@@ -40,7 +40,7 @@ func UmountOverlayContainer(shareDir, image string, index int, hub chan VmEvent)
 }
 
 func aufsUnmount(target string) error {
-	logrus.Infof("Ready to unmount the target : %s", target)
+	logrus.Infof("[RUNV] Ready to unmount the target : %s", target)
 	if _, err := os.Stat(target); err != nil && os.IsNotExist(err) {
 		return nil
 	}

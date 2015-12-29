@@ -21,10 +21,10 @@ func (ctx *VmContext) loop() {
 			logrus.Error("hub chan has already been closed")
 			break
 		} else if ev == nil {
-			logrus.Info("got nil event.")
+			logrus.Info("[RUNV] got nil event.")
 			continue
 		}
-		logrus.Infof("main event loop got message %d(%s)", ev.Event(), EventString(ev.Event()))
+		logrus.Infof("[RUNV] main event loop got message %d(%s)", ev.Event(), EventString(ev.Event()))
 		ctx.handler(ctx, ev)
 	}
 }
@@ -50,7 +50,7 @@ func VmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *
 func VmAssociate(vmId string, hub chan VmEvent, client chan *types.VmResponse,
 	wg *sync.WaitGroup, pack []byte) {
 
-	logrus.Infof("VM %s trying to reload with serialized data: %s", vmId, string(pack))
+	logrus.Infof("[RUNV] VM %s trying to reload with serialized data: %s", vmId, string(pack))
 
 	pinfo, err := vmDeserialize(pack)
 	if err != nil {

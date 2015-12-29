@@ -73,7 +73,7 @@ func newNetworkAddSession(qc *QemuContext, fd uint64, device, mac string, index,
 	busAddr := fmt.Sprintf("0x%x", addr)
 	commands := make([]*QmpCommand, 3)
 	scm := syscall.UnixRights(int(fd))
-	logrus.Infof("send net to qemu at %d", int(fd))
+	logrus.Infof("[RUNV] send net to qemu at %d", int(fd))
 	commands[0] = &QmpCommand{
 		Execute: "getfd",
 		Arguments: map[string]interface{}{

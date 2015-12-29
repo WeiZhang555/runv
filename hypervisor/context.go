@@ -210,11 +210,11 @@ func (ctx *VmContext) Lookup(container string) int {
 	}
 	for idx, c := range ctx.vmSpec.Containers {
 		if c.Id == container {
-			logrus.Infof("found container %s at %d", container, idx)
+			logrus.Infof("[RUNV] found container %s at %d", container, idx)
 			return idx
 		}
 	}
-	logrus.Infof("can not found container %s", container)
+	logrus.Infof("[RUNV] can not found container %s", container)
 	return -1
 }
 
@@ -240,7 +240,7 @@ func (ctx *VmContext) Close() {
 
 func (ctx *VmContext) tryClose() bool {
 	if ctx.deviceReady() {
-		logrus.Info("no more device to release/remove/umount, quit")
+		logrus.Info("[RUNV] no more device to release/remove/umount, quit")
 		ctx.Close()
 		return true
 	}
@@ -253,7 +253,7 @@ func (ctx *VmContext) Become(handler stateHandler, desc string) {
 	ctx.handler = handler
 	ctx.current = desc
 	ctx.lock.Unlock()
-	logrus.Infof("VM %s: state change from %s to '%s'", ctx.Id, orig, desc)
+	logrus.Infof("[RUNV] VM %s: state change from %s to '%s'", ctx.Id, orig, desc)
 }
 
 // InitDeviceContext will init device info in context
@@ -263,6 +263,7 @@ func (ctx *VmContext) InitDeviceContext(spec *pod.UserPod, wg *sync.WaitGroup,
 	ctx.lock.Lock()
 	defer ctx.lock.Unlock()
 
+	logrus.Debugf("---ZW: a")
 	/* Update interface count accourding to user pod */
 	ret := len(spec.Interfaces)
 	if ret != 0 {
@@ -284,13 +285,14 @@ func (ctx *VmContext) InitDeviceContext(spec *pod.UserPod, wg *sync.WaitGroup,
 	ctx.initVolumeMap(spec)
 
 	for i, c := range cInfo {
-		logrus.Infof("#%d Container Info:", i)
+		logrus.Infof("[RUNV] #%d Container Info:", i)
 		b, err := json.MarshalIndent(c, "...|", "    ")
 		if err == nil {
-			logrus.Info("\n", string(b))
+			logrus.Info("[RUNV] \n", string(b))
 		}
 	}
 
+	logrus.Debugf("---ZW: b")
 	containers := make([]VmContainer, len(spec.Containers))
 
 	for i, container := range spec.Containers {
@@ -328,4 +330,5 @@ func (ctx *VmContext) InitDeviceContext(spec *pod.UserPod, wg *sync.WaitGroup,
 
 	ctx.userSpec = spec
 	ctx.wg = wg
+	logrus.Debugf("---ZW: c")
 }

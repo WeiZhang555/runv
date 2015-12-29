@@ -52,7 +52,7 @@ func (vd *VBoxDriver) InitNetwork(bIface, bIP string) error {
 	bip = bip.Mask(ipnet.Mask)
 	for inc(bip, 1); ipnet.Contains(bip) && i < 2; inc(bip, 1) {
 		i++
-		logrus.Infof("Try %s", bip.String())
+		logrus.Infof("[RUNV] Try %s", bip.String())
 		_, err = network.IpAllocator.RequestIP(network.BridgeIPv4Net, bip)
 		if err != nil {
 			logrus.Errorf(err.Error())
@@ -103,7 +103,7 @@ func ReleasePortMaps(vmId string, containerip string, maps []pod.UserContainerPo
 	}
 
 	for _, m := range maps {
-		logrus.Infof("release port map %d", m.HostPort)
+		logrus.Infof("[RUNV] release port map %d", m.HostPort)
 		err := network.PortMapper.ReleaseMap(m.Protocol, m.HostPort)
 		if err != nil {
 			continue
