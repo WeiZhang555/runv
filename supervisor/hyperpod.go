@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/hyperhq/runv/factory"
@@ -62,6 +63,20 @@ func (hp *HyperPod) createContainer(container, bundlePath, stdin, stdout, stderr
 
 	glog.Infof("createContainer() calls c.run(p)")
 	c.run(p)
+	alarm := time.After(5 * time.Second)
+	for {
+		if pid := c.ownerPod.vm.GetPid(); pid > 0 {
+			p.ProcId = pid
+			break
+		}
+
+		select {
+		case <-alarm:
+			glog.V(3).Infof("Timeout while waiting to get VM pid")
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 	return c, nil
 }
 

@@ -31,7 +31,7 @@ func (ctx *VmContext) loop() {
 	}
 }
 
-func VmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *BootConfig) {
+func VmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *BootConfig, pidChan chan int) {
 	context, err := InitContext(vmId, hub, client, nil, boot)
 	if err != nil {
 		client <- &types.VmResponse{
@@ -44,7 +44,7 @@ func VmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *
 
 	//launch routines
 	context.startSocks()
-	context.DCtx.Launch(context)
+	context.DCtx.Launch(context, pidChan)
 
 	context.loop()
 }

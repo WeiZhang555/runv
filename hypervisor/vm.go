@@ -16,6 +16,7 @@ import (
 
 type Vm struct {
 	Id     string
+	Pid    int
 	Pod    *PodStatus
 	Status uint
 	Cpu    int
@@ -24,6 +25,10 @@ type Vm struct {
 
 	Hub     chan VmEvent
 	clients *Fanout
+}
+
+func (vm *Vm) GetPid() int {
+	return vm.Pid
 }
 
 func (vm *Vm) GetResponseChan() (chan *types.VmResponse, error) {
@@ -45,15 +50,21 @@ func (vm *Vm) Launch(b *BootConfig) (err error) {
 		Status   = make(chan *types.VmResponse, 128)
 	)
 
+	pidChan := make(chan int, 1)
 	if vm.Lazy {
 		go LazyVmLoop(vm.Id, PodEvent, Status, b)
 	} else {
-		go VmLoop(vm.Id, PodEvent, Status, b)
+		go VmLoop(vm.Id, PodEvent, Status, b, pidChan)
 	}
 
 	vm.Hub = PodEvent
 	vm.clients = CreateFanout(Status, 128, false)
 
+	select {
+	case vm.Pid = <-pidChan:
+	case <-time.After(5 * time.Second):
+		glog.V(3).Infof("Timeout when wait for VM pid")
+	}
 	return nil
 }
 

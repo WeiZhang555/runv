@@ -531,7 +531,8 @@ func (lc *LibvirtContext) domainXml(ctx *hypervisor.VmContext) (string, error) {
 	return string(data), nil
 }
 
-func (lc *LibvirtContext) Launch(ctx *hypervisor.VmContext) {
+func (lc *LibvirtContext) Launch(ctx *hypervisor.VmContext, pidChan chan int) {
+	defer close(pidChan)
 	domainXml, err := lc.domainXml(ctx)
 	if err != nil {
 		glog.Error("Fail to get domain xml configuration:", err)

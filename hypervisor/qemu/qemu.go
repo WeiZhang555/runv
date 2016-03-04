@@ -100,8 +100,8 @@ func (qd *QemuDriver) LoadContext(persisted map[string]interface{}) (hypervisor.
 	}, nil
 }
 
-func (qc *QemuContext) Launch(ctx *hypervisor.VmContext) {
-	go launchQemu(qc, ctx)
+func (qc *QemuContext) Launch(ctx *hypervisor.VmContext, pidChan chan int) {
+	go launchQemu(qc, ctx, pidChan)
 	go qmpHandler(ctx)
 }
 

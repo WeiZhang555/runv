@@ -75,7 +75,8 @@ func (vd *VBoxDriver) LoadContext(persisted map[string]interface{}) (hypervisor.
 }
 
 // Create VM and start it
-func (vc *VBoxContext) Launch(ctx *hypervisor.VmContext) {
+func (vc *VBoxContext) Launch(ctx *hypervisor.VmContexti, pidChan chan int) {
+	defer close(pidChan)
 	// 0. Find an exist vm
 	var exist bool = false
 	var m *virtualbox.Machine

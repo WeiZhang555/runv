@@ -50,7 +50,8 @@ func (qc *QemuContext) watchPid(pid int, hub chan hypervisor.VmEvent) error {
 }
 
 // launchQemu run qemu and wait it's quit, includes
-func launchQemu(qc *QemuContext, ctx *hypervisor.VmContext) {
+func launchQemu(qc *QemuContext, ctx *hypervisor.VmContext, pidChan chan int) {
+	defer close(pidChan)
 	qemu := qc.driver.executable
 	if qemu == "" {
 		ctx.Hub <- &hypervisor.VmStartFailEvent{Message: "can not find qemu executable"}
@@ -71,6 +72,7 @@ func launchQemu(qc *QemuContext, ctx *hypervisor.VmContext) {
 		return
 	}
 
+	pidChan <- int(pid)
 	glog.V(1).Infof("starting daemon with pid: %d", pid)
 
 	err = ctx.DCtx.(*QemuContext).watchPid(int(pid), ctx.Hub)

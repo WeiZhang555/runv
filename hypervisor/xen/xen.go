@@ -145,7 +145,8 @@ func (xd *XenDriver) LoadContext(persisted map[string]interface{}) (hypervisor.D
 	return &XenContext{driver: xd, domId: domid}, nil
 }
 
-func (xc *XenContext) Launch(ctx *hypervisor.VmContext) {
+func (xc *XenContext) Launch(ctx *hypervisor.VmContext, pidChan chan int) {
+	defer close(pidChan)
 	//    go func(){
 	extra := []string{
 		"-device", fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=%d", PCI_AVAILABLE_ADDRESS),

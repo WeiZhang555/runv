@@ -49,7 +49,7 @@ type HypervisorDriver interface {
 var HDriver HypervisorDriver
 
 type DriverContext interface {
-	Launch(ctx *VmContext)
+	Launch(ctx *VmContext, pidChan chan int)
 	Associate(ctx *VmContext)
 	Dump() (map[string]interface{}, error)
 
@@ -110,7 +110,9 @@ func (ed *EmptyDriver) SupportLazyMode() bool {
 	return false
 }
 
-func (ec *EmptyContext) Launch(ctx *VmContext) {}
+func (ec *EmptyContext) Launch(ctx *VmContext, pidChan chan int) {
+	close(pidChan)
+}
 
 func (ec *EmptyContext) Associate(ctx *VmContext) {}
 
