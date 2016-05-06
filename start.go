@@ -17,15 +17,6 @@ import (
 	netcontext "golang.org/x/net/context"
 )
 
-func firstExistingFile(candidates []string) string {
-	for _, file := range candidates {
-		if _, err := os.Stat(file); err == nil {
-			return file
-		}
-	}
-	return ""
-}
-
 var startCommand = cli.Command{
 	Name:  "start",
 	Usage: "create and run a container",
@@ -99,7 +90,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 		initrd := context.GlobalString("initrd")
 		// only set the default kernel/initrd when it is the first container(sharedContainer == "")
 		if kernel == "" && sharedContainer == "" {
-			kernel = firstExistingFile([]string{
+			kernel = utils.FirstExistingFile([]string{
 				filepath.Join(bundle, spec.Root.Path, "boot/vmlinuz"),
 				filepath.Join(bundle, "boot/vmlinuz"),
 				filepath.Join(bundle, "vmlinuz"),
@@ -107,7 +98,7 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			})
 		}
 		if initrd == "" && sharedContainer == "" {
-			initrd = firstExistingFile([]string{
+			initrd = utils.FirstExistingFile([]string{
 				filepath.Join(bundle, spec.Root.Path, "boot/initrd.img"),
 				filepath.Join(bundle, "boot/initrd.img"),
 				filepath.Join(bundle, "initrd.img"),

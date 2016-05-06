@@ -2,6 +2,7 @@ package utils
 
 import (
 	"net"
+	"os"
 	"time"
 )
 
@@ -23,4 +24,13 @@ func UnixSocketConnect(name string) (conn net.Conn, err error) {
 	}
 
 	return
+}
+
+func FirstExistingFile(candidates []string) string {
+	for _, file := range candidates {
+		if _, err := os.Stat(file); err == nil {
+			return file
+		}
+	}
+	return ""
 }

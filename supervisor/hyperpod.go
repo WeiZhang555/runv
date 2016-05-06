@@ -9,6 +9,7 @@ import (
 	"github.com/hyperhq/runv/factory"
 	"github.com/hyperhq/runv/hypervisor"
 	"github.com/hyperhq/runv/hypervisor/pod"
+	"github.com/hyperhq/runv/lib/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -77,10 +78,51 @@ func createHyperPod(f factory.Factory, spec *specs.Spec) (*HyperPod, error) {
 	if userPod.Resource.Memory > 0 {
 		mem = userPod.Resource.Memory
 	}
-	vm, err := f.GetVm(cpu, mem)
-	if err != nil {
-		glog.V(1).Infof("%s\n", err.Error())
-		return nil, err
+
+	// if image contains kernel file then use it first instead of default kernel
+	kernel := utils.FirstExistingFile([]string{
+		filepath.Join(spec.Root.Path, "boot/vmlinuz"),
+		filepath.Join(spec.Root.Path, "vmlinuz"),
+		filepath.Join(spec.Root.Path, "kernel"),
+		hypervisor.DefaultKernel,
+	})
+	// if image contains initrd file then use it first instead of default initrd
+	initrd := utils.FirstExistingFile([]string{
+		filepath.Join(spec.Root.Path, "boot/initrd.img"),
+		filepath.Join(spec.Root.Path, "initrd.img"),
+		hypervisor.DefaultInitrd,
+	})
+
+	if len(kernel) == 0 {
+		return nil, fmt.Errorf("Can't find valid kernel file")
+	}
+	if len(initrd) == 0 {
+		return nil, fmt.Errorf("Can't find valid initrd file")
+	}
+
+	var (
+		vm  *hypervisor.Vm
+		err error
+	)
+	if kernel == hypervisor.DefaultKernel && initrd == hypervisor.DefaultInitrd {
+		vm, err = f.GetVm(cpu, mem)
+		if err != nil {
+			glog.V(1).Infof("Create VM failed with default kernel config: %s", err.Error())
+			return nil, err
+		}
+	} else {
+		boot := &hypervisor.BootConfig{
+			CPU:    cpu,
+			Memory: mem,
+			Kernel: kernel,
+			Initrd: initrd,
+		}
+
+		vm, err = hypervisor.GetVm("", boot, true, false)
+		if err != nil {
+			glog.V(1).Infof("Create VM failed: %s", err.Error())
+			return nil, err
+		}
 	}
 
 	Response := vm.StartPod(podStatus, userPod, nil, nil)
