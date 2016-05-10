@@ -3,6 +3,7 @@ package supervisor
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -141,6 +142,25 @@ func (sv *Supervisor) getHyperPod(container string, spec *specs.Spec) (hp *Hyper
 		return nil, fmt.Errorf("The container %s is already existing", container)
 	}
 	for _, ns := range spec.Linux.Namespaces {
+		if ns.Type == "network" && len(ns.Path) > 0 {
+			pidexp := regexp.MustCompile(`/proc/(\d+)/ns/net`)
+			matches := pidexp.FindStringSubmatch(ns.Path)
+			if len(matches) != 2 {
+				return nil, fmt.Errorf("Can't find shared container with network ns path %s", ns.Path)
+			}
+			pid := matches[1]
+
+			for _, c := range sv.Containers {
+				if c.ownerPod != nil && c.ownerPod.vm != nil &&
+					pid == fmt.Sprintf("%d", c.ownerPod.vm.GetPid()) {
+					hp = c.ownerPod
+				}
+			}
+			if hp == nil {
+				return nil, fmt.Errorf("Can't find shared container with network ns path %s", ns.Path)
+			}
+			continue
+		}
 		if ns.Path != "" {
 			if strings.Contains(ns.Path, "/") {
 				return nil, fmt.Errorf("Runv doesn't support path to namespace file, it supports containers name as shared namespaces only")
