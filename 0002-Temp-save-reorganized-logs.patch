@@ -1,0 +1,639 @@
+From 21d66962468188d3b4f7f4b7e60867ab1d69f9bc Mon Sep 17 00:00:00 2001
+From: Zhang Wei <zhangwei555@huawei.com>
+Date: Thu, 9 Mar 2017 14:23:02 +0800
+Subject: [PATCH 2/2] Temp save: reorganized logs
+
+Signed-off-by: Zhang Wei <zhangwei555@huawei.com>
+---
+ factory/direct/direct.go         |   4 ++--
+ factory/factory.go               |   1 +
+ hyperstart/api/json/constants.go |  26 ++++++++++++++++++++++++++
+ hyperstart/api/json/types.go     |   9 +++++++++
+ hypervisor/.context.go.swp       | Bin 0 -> 28672 bytes
+ hypervisor/context.go            |  15 ++++++++-------
+ hypervisor/init_comm.go          |  39 +++++++++++++++++----------------------
+ hypervisor/lazy.go               |   2 +-
+ hypervisor/qemu/qemu.go          |   3 ++-
+ hypervisor/qemu/qemu_process.go  |   2 +-
+ hypervisor/tty.go                |  21 +++++++++++----------
+ hypervisor/vm.go                 |   3 ++-
+ namespaced.go                    |   2 +-
+ run.go                           |  33 ++++++++++++++++++---------------
+ 14 files changed, 99 insertions(+), 61 deletions(-)
+ create mode 100644 hypervisor/.context.go.swp
+
+diff --git a/factory/direct/direct.go b/factory/direct/direct.go
+index 7d61c59..1b3dd3c 100644
+--- a/factory/direct/direct.go
++++ b/factory/direct/direct.go
+@@ -39,9 +39,9 @@ func (d *directFactory) GetBaseVm() (*hypervisor.Vm, error) {
+ 		}
+ 	}
+ 	if err == nil {
+-		glog.V(2).Infof("direct factory created vm:%s", vm.Id)
++		glog.V(3).Infof("direct factory created vm: %s", vm.Id)
+ 	} else {
+-		glog.V(2).Infof("direct factory failed to create vm")
++		glog.V(3).Infof("direct factory failed to create vm")
+ 
+ 	}
+ 	return vm, err
+diff --git a/factory/factory.go b/factory/factory.go
+index 653d511..7d4a374 100644
+--- a/factory/factory.go
++++ b/factory/factory.go
+@@ -6,6 +6,7 @@ package factory
+ 
+ import (
+ 	"encoding/json"
++
+ 	"github.com/golang/glog"
+ 	"github.com/hyperhq/runv/factory/base"
+ 	"github.com/hyperhq/runv/factory/cache"
+diff --git a/hyperstart/api/json/constants.go b/hyperstart/api/json/constants.go
+index 33fe448..8e15f93 100644
+--- a/hyperstart/api/json/constants.go
++++ b/hyperstart/api/json/constants.go
+@@ -25,3 +25,29 @@ const (
+ 	INIT_DELETEINTERFACE
+ 	INIT_SETUPROUTE
+ )
++
++var codeToString = map[uint32]string{
++	INIT_RESERVED:         "INIT_RESERVED",
++	INIT_STARTPOD:         "INIT_STARTPOD",
++	INIT_GETPOD:           "INIT_GETPOD",
++	INIT_STOPPOD:          "INIT_STOPPOD",
++	INIT_DESTROYPOD:       "INIT_DESTROYPOD",
++	INIT_RESTARTCONTAINER: "INIT_RESTARTCONTAINER",
++	INIT_EXECCMD:          "INIT_EXECCMD",
++	INIT_FINISHCMD:        "INIT_FINISHCMD",
++	INIT_READY:            "INIT_READY",
++	INIT_ACK:              "INIT_ACK",
++	INIT_ERROR:            "INIT_ERROR",
++	INIT_WINSIZE:          "INIT_WINSIZE",
++	INIT_PING:             "INIT_PING",
++	INIT_FINISHPOD:        "INIT_FINISHPOD",
++	INIT_NEXT:             "INIT_NEXT",
++	INIT_WRITEFILE:        "INIT_WRITEFILE",
++	INIT_READFILE:         "INIT_READFILE",
++	INIT_NEWCONTAINER:     "INIT_NEWCONTAINER",
++	INIT_KILLCONTAINER:    "INIT_KILLCONTAINER",
++	INIT_ONLINECPUMEM:     "INIT_ONLINECPUMEM",
++	INIT_SETUPINTERFACE:   "INIT_SETUPINTERFACE",
++	INIT_DELETEINTERFACE:  "INIT_DELETEINTERFACE",
++	INIT_SETUPROUTE:       "INIT_SETUPROUTE",
++}
+diff --git a/hyperstart/api/json/types.go b/hyperstart/api/json/types.go
+index 4c47557..a3e45be 100644
+--- a/hyperstart/api/json/types.go
++++ b/hyperstart/api/json/types.go
+@@ -49,3 +49,12 @@ type WindowSizeMessage struct {
+ 	Row    uint16 `json:"row"`
+ 	Column uint16 `json:"column"`
+ }
++
++func (dm *DecodedMessage) CodeToString() string {
++	str, ok := codeToString[dm.Code]
++	if !ok {
++		str = "UNKNOWN"
++	}
++
++	return str
++}
+diff --git a/hypervisor/.context.go.swp b/hypervisor/.context.go.swp
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d95e75b6b02f6676e3da341f3f24b637130add3
+GIT binary patch
+literal 28672
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/hypervisor/context.go b/hypervisor/context.go
+index 5d4abce..4d2230a 100644
+--- a/hypervisor/context.go
++++ b/hypervisor/context.go
+@@ -3,6 +3,7 @@ package hypervisor
+ import (
+ 	"encoding/json"
+ 	"os"
++	"path/filepath"
+ 	"sync"
+ 	"time"
+ 
+@@ -69,18 +70,18 @@ func InitContext(id string, hub chan VmEvent, client chan *types.VmResponse, dc
+ 	vmChannel := make(chan *hyperstartCmd, 128)
+ 
+ 	//dir and sockets:
+-	homeDir := BaseDir + "/" + id + "/"
+-	hyperSockName := homeDir + HyperSockName
+-	ttySockName := homeDir + TtySockName
+-	consoleSockName := homeDir + ConsoleSockName
+-	shareDir := homeDir + ShareDirTag
++	homeDir := filepath.Join(BaseDir, id)
++	hyperSockName := filepath.Join(homeDir, HyperSockName)
++	ttySockName := filepath.Join(homeDir, TtySockName)
++	consoleSockName := filepath.Join(homeDir, ConsoleSockName)
++	shareDir := filepath.Join(homeDir, ShareDirTag)
+ 
+ 	if dc == nil {
+ 		dc = HDriver.InitContext(homeDir)
+ 	}
+ 	err = os.MkdirAll(shareDir, 0755)
+ 	if err != nil {
+-		glog.Error("cannot make dir", shareDir, err.Error())
++		glog.Errorf("can't make dir %q: %v", shareDir, err)
+ 		return nil, err
+ 	}
+ 	defer func() {
+@@ -210,7 +211,7 @@ func (ctx *VmContext) Become(handler stateHandler, desc string) {
+ 	ctx.handler = handler
+ 	ctx.current = desc
+ 	ctx.lock.Unlock()
+-	glog.V(1).Infof("VM %s: state change from %s to '%s'", ctx.Id, orig, desc)
++	glog.V(3).Infof("VM %s: state change from %s to '%s'", ctx.Id, orig, desc)
+ }
+ 
+ // InitDeviceContext will init device info in context
+diff --git a/hypervisor/init_comm.go b/hypervisor/init_comm.go
+index 665d588..6a07d76 100644
+--- a/hypervisor/init_comm.go
++++ b/hypervisor/init_comm.go
+@@ -48,21 +48,20 @@ func defaultHyperstartResultChan(ctx *VmContext, cmd *hyperstartCmd) chan<- erro
+ }
+ 
+ func waitConsoleOutput(ctx *VmContext) {
+-
+ 	conn, err := utils.UnixSocketConnect(ctx.ConsoleSockName)
+ 	if err != nil {
+-		glog.Error("failed to connected to ", ctx.ConsoleSockName, " ", err.Error())
++		glog.Errorf("failed to connected to %s: %v", ctx.ConsoleSockName, err)
+ 		return
+ 	}
+ 
+-	glog.V(1).Info("connected to ", ctx.ConsoleSockName)
++	glog.V(3).Info("connected to ", ctx.ConsoleSockName)
+ 
+ 	tc, err := telnet.NewConn(conn)
+ 	if err != nil {
+-		glog.Error("fail to init telnet connection to ", ctx.ConsoleSockName, ": ", err.Error())
++		glog.Errorf("fail to init telnet connection to %s: %v", ctx.ConsoleSockName, err)
+ 		return
+ 	}
+-	glog.V(1).Infof("connected %s as telnet mode.", ctx.ConsoleSockName)
++	glog.V(3).Infof("connected %s as telnet mode.", ctx.ConsoleSockName)
+ 
+ 	cout := make(chan string, 128)
+ 	go TtyLiner(tc, cout)
+@@ -72,7 +71,7 @@ func waitConsoleOutput(ctx *VmContext) {
+ 		if ok {
+ 			glog.V(3).Info("[console] ", line)
+ 		} else {
+-			glog.Info("console output end")
++			glog.V(3).Info("console output end")
+ 			break
+ 		}
+ 	}
+@@ -98,7 +97,6 @@ func ReadVmMessage(conn *net.UnixConn) (*hyperstartapi.DecodedMessage, error) {
+ 		if want > 512 {
+ 			want = 512
+ 		}
+-		glog.V(1).Infof("trying to read %d bytes", want)
+ 		nr, err := conn.Read(buf[:want])
+ 		if err != nil {
+ 			glog.Error("read init data failed")
+@@ -108,11 +106,8 @@ func ReadVmMessage(conn *net.UnixConn) (*hyperstartapi.DecodedMessage, error) {
+ 		res = append(res, buf[:nr]...)
+ 		read = read + nr
+ 
+-		glog.V(1).Infof("read %d/%d [length = %d]", read, needRead, length)
+-
+ 		if length == 0 && read >= 8 {
+ 			length = int(binary.BigEndian.Uint32(res[4:8]))
+-			glog.V(1).Infof("data length is %d", length)
+ 			if length > 8 {
+ 				needRead = length
+ 			}
+@@ -149,9 +144,9 @@ func waitInitReady(ctx *VmContext) {
+ 		ctx.Hub <- &InitConnectedEvent{conn: conn.(*net.UnixConn)}
+ 		go waitCmdToInit(ctx, conn.(*net.UnixConn))
+ 	} else {
+-		glog.Warningf("Get init message %d", msg.Code)
++		glog.Warningf("Get init message: code %q(%d)", msg.CodeToString, msg.Code)
+ 		ctx.Hub <- &InitFailedEvent{
+-			Reason: fmt.Sprintf("Get init message %d", msg.Code),
++			Reason: fmt.Sprintf("Get init message: code %q(%d)", msg.CodeToString(), msg.Code),
+ 		}
+ 		conn.Close()
+ 	}
+@@ -193,12 +188,12 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
+ 		ctx.vm <- &hyperstartCmd{
+ 			Code: hyperstartapi.INIT_PING,
+ 		}
+-		glog.V(1).Info("Sent a ping message to hyperstart init")
++		glog.V(3).Info("Sent a ping message to hyperstart init")
+ 	})
+ 	timerStopSync(pingTimer)
+ 
+ 	pongTimer := time.AfterFunc(30*time.Second, func() {
+-		glog.Errorf("DBG: pongTimer")
++		glog.V(3).Infof("DBG: pongTimer")
+ 		if !ctx.Paused {
+ 			ctx.Hub <- &Interrupted{Reason: "hyperstart init did not reply to the ping msg"}
+ 		}
+@@ -216,11 +211,11 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
+ 		if cmd.result == nil {
+ 			cmd.result = defaultHyperstartResultChan(ctx, cmd)
+ 		}
+-		glog.Infof("got cmd:%d", cmd.Code)
++		glog.V(3).Infof("got cmd: %d", cmd.Code)
+ 		if cmd.Code == hyperstartapi.INIT_ACK || cmd.Code == hyperstartapi.INIT_ERROR {
+ 			if len(cmds) > 0 {
+ 				if cmds[0].Code == hyperstartapi.INIT_DESTROYPOD {
+-					glog.Info("got response of shutdown command, last round of command to init")
++					glog.V(3).Info("got response of shutdown command, last round of command to init")
+ 					looping = false
+ 				}
+ 				if cmd.Code == hyperstartapi.INIT_ACK {
+@@ -234,7 +229,7 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
+ 				}
+ 				cmds = cmds[1:]
+ 
+-				glog.V(1).Info("got ack, clearing pong timer")
++				glog.V(3).Info("got ack, clearing pong timer")
+ 				timerStopSync(pongTimer)
+ 				timerStopSync(pingTimer)
+ 				pingTimer.Reset(30 * time.Second)
+@@ -266,10 +261,10 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
+ 			}
+ 		} else {
+ 			if cmd.Code == hyperstartapi.INIT_NEXT {
+-				glog.V(1).Infof("get command NEXT")
++				glog.V(3).Infof("get command NEXT")
+ 
+ 				got += int(binary.BigEndian.Uint32(cmd.retMsg[0:4]))
+-				glog.V(1).Infof("send %d, receive %d", index, got)
++				glog.V(3).Infof("send %d, receive %d", index, got)
+ 				timeout = false
+ 				if index == got {
+ 					/* received the sent out message */
+@@ -294,7 +289,7 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
+ 					Code:    cmd.Code,
+ 					Message: message,
+ 				}
+-				glog.V(1).Infof("send command %d to init, payload: '%s'.", cmd.Code, string(msg.Message))
++				glog.V(3).Infof("send command %q(%d) to init, payload: '%s'.", msg.CodeToString(), cmd.Code, string(msg.Message))
+ 				cmds = append(cmds, cmd)
+ 				data = append(data, NewVmMessage(msg)...)
+ 				timeout = true
+@@ -307,12 +302,12 @@ func waitCmdToInit(ctx *VmContext, init *net.UnixConn) {
+ 				}
+ 
+ 				wrote, _ := init.Write(data[:end])
+-				glog.V(1).Infof("write %d to init, payload: '%s'.", wrote, data[:end])
++				glog.V(5).Infof("write %d to init, payload: %q.", wrote, data[:end])
+ 				index += wrote
+ 			}
+ 
+ 			if timeout {
+-				glog.V(1).Info("message sent, set pong timer")
++				glog.V(3).Info("message sent, set pong timer")
+ 				timerStopSync(pongTimer)
+ 				pongTimer.Reset(30 * time.Second)
+ 			}
+diff --git a/hypervisor/lazy.go b/hypervisor/lazy.go
+index b6253b2..0d0cb27 100644
+--- a/hypervisor/lazy.go
++++ b/hypervisor/lazy.go
+@@ -10,7 +10,7 @@ import (
+ 
+ func LazyVmLoop(vmId string, hub chan VmEvent, client chan *types.VmResponse, boot *BootConfig) {
+ 
+-	glog.V(1).Infof("Start VM %s in lazy mode, not started yet actually", vmId)
++	glog.V(3).Infof("Start VM %q in lazy mode, not started yet actually", vmId)
+ 
+ 	context, err := InitContext(vmId, hub, client, nil, boot)
+ 	if err != nil {
+diff --git a/hypervisor/qemu/qemu.go b/hypervisor/qemu/qemu.go
+index e977ccf..bc13ea4 100644
+--- a/hypervisor/qemu/qemu.go
++++ b/hypervisor/qemu/qemu.go
+@@ -5,6 +5,7 @@ import (
+ 	"fmt"
+ 	"os"
+ 	"os/exec"
++	"path/filepath"
+ 	"strconv"
+ 	"strings"
+ 	"sync"
+@@ -52,7 +53,7 @@ func (qd *QemuDriver) InitContext(homeDir string) hypervisor.DriverContext {
+ 		driver:      qd,
+ 		qmp:         make(chan QmpInteraction, 128),
+ 		wdt:         make(chan string, 16),
+-		qmpSockName: homeDir + QmpSockName,
++		qmpSockName: filepath.Join(homeDir, QmpSockName),
+ 		process:     nil,
+ 	}
+ }
+diff --git a/hypervisor/qemu/qemu_process.go b/hypervisor/qemu/qemu_process.go
+index 8f7815c..899f36b 100644
+--- a/hypervisor/qemu/qemu_process.go
++++ b/hypervisor/qemu/qemu_process.go
+@@ -34,7 +34,7 @@ func watchDog(qc *QemuContext, hub chan hypervisor.VmEvent) {
+ 				return
+ 			}
+ 		} else {
+-			glog.V(1).Info("chan closed, quit watch dog.")
++			glog.V(3).Info("chan closed, quit watch dog.")
+ 			break
+ 		}
+ 	}
+diff --git a/hypervisor/tty.go b/hypervisor/tty.go
+index 4052ca0..c3171fc 100644
+--- a/hypervisor/tty.go
++++ b/hypervisor/tty.go
+@@ -87,7 +87,7 @@ func readTtyMessage(conn *net.UnixConn) (*hyperstartapi.TtyMessage, error) {
+ 		if want > 512 {
+ 			want = 512
+ 		}
+-		glog.V(1).Infof("tty: trying to read %d bytes", want)
++		glog.V(3).Infof("tty: trying to read %d bytes", want)
+ 		nr, err := conn.Read(buf[:want])
+ 		if err != nil {
+ 			glog.Error("read tty data failed")
+@@ -97,11 +97,11 @@ func readTtyMessage(conn *net.UnixConn) (*hyperstartapi.TtyMessage, error) {
+ 		res = append(res, buf[:nr]...)
+ 		read = read + nr
+ 
+-		glog.V(1).Infof("tty: read %d/%d [length = %d]", read, needRead, length)
++		glog.V(3).Infof("tty: read %d/%d [length = %d]", read, needRead, length)
+ 
+ 		if length == 0 && read >= 12 {
+ 			length = int(binary.BigEndian.Uint32(res[8:12]))
+-			glog.V(1).Infof("data length is %d", length)
++			glog.V(3).Infof("data length is %d", length)
+ 			if length > 12 {
+ 				needRead = length
+ 			}
+@@ -118,7 +118,7 @@ func waitTtyMessage(ctx *VmContext, conn *net.UnixConn) {
+ 	for {
+ 		msg, ok := <-ctx.ptys.channel
+ 		if !ok {
+-			glog.V(1).Info("tty chan closed, quit sent goroutine")
++			glog.V(3).Info("tty chan closed, quit sent goroutine")
+ 			break
+ 		}
+ 
+@@ -127,7 +127,7 @@ func waitTtyMessage(ctx *VmContext, conn *net.UnixConn) {
+ 		if _, ok := ctx.ptys.ttys[msg.Session]; ok {
+ 			_, err := conn.Write(msg.ToBuffer())
+ 			if err != nil {
+-				glog.V(1).Info("Cannot write to tty socket: ", err.Error())
++				glog.Errorf("Cannot write to tty socket: %v", err)
+ 				return
+ 			}
+ 		}
+@@ -144,7 +144,7 @@ func waitPts(ctx *VmContext) {
+ 		return
+ 	}
+ 
+-	glog.V(1).Info("tty socket connected")
++	glog.V(3).Info("tty socket connected")
+ 
+ 	go waitTtyMessage(ctx, conn.(*net.UnixConn))
+ 
+@@ -156,17 +156,18 @@ func waitPts(ctx *VmContext) {
+ 			close(ctx.ptys.channel)
+ 			return
+ 		}
++		glog.V(3).Infof("[PLEASE REMOVE]============>DBG: got tty message: %#v", res)
+ 		ctx.ptys.lock.Lock()
+ 		if ta, ok := ctx.ptys.ttys[res.Session]; ok {
+ 			if len(res.Message) == 0 {
+-				glog.V(1).Infof("session %d closed by peer, close pty", res.Session)
++				glog.V(3).Infof("session %d closed by peer, close pty", res.Session)
+ 				ta.closed = true
+ 			} else if ta.closed {
+ 				var code uint8 = 255
+ 				if len(res.Message) == 1 {
+ 					code = uint8(res.Message[0])
+ 				}
+-				glog.V(1).Infof("session %d, exit code %d", res.Session, code)
++				glog.V(3).Infof("session %d, exit code %d", res.Session, code)
+ 				ctx.ptys.close(res.Session, code)
+ 			} else {
+ 				for _, tty := range ta.attachments {
+@@ -250,7 +251,7 @@ func (tty *TtyIO) stdinIsClosed() bool {
+ 
+ func (tty *TtyIO) Close(code uint8) string {
+ 
+-	glog.V(1).Info("Close tty ", tty.ClientTag)
++	glog.V(3).Info("Close tty ", tty.ClientTag)
+ 
+ 	if tty.Stdin != nil {
+ 		tty.stdinClose()
+@@ -475,7 +476,7 @@ func TtyLiner(conn io.Reader, output chan string) {
+ 
+ 		nr, err := conn.Read(buf)
+ 		if err != nil || nr < 1 {
+-			glog.V(1).Info("Input byte chan closed, close the output string chan")
++			glog.V(3).Info("Input byte chan closed, close the output string chan")
+ 			close(output)
+ 			return
+ 		}
+diff --git a/hypervisor/vm.go b/hypervisor/vm.go
+index 1c9a3b6..fe60520 100644
+--- a/hypervisor/vm.go
++++ b/hypervisor/vm.go
+@@ -4,6 +4,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"os"
++	"path/filepath"
+ 	"strings"
+ 	"sync/atomic"
+ 	"syscall"
+@@ -727,7 +728,7 @@ func GetVm(vmId string, b *BootConfig, waitStarted, lazy bool) (vm *Vm, err erro
+ 	if id == "" {
+ 		for {
+ 			id = fmt.Sprintf("vm-%s", pod.RandStr(10, "alpha"))
+-			if _, err = os.Stat(BaseDir + "/" + id); os.IsNotExist(err) {
++			if _, err = os.Stat(filepath.Join(BaseDir, id)); os.IsNotExist(err) {
+ 				break
+ 			}
+ 		}
+diff --git a/namespaced.go b/namespaced.go
+index 53ab461..9ab123b 100644
+--- a/namespaced.go
++++ b/namespaced.go
+@@ -43,7 +43,7 @@ func runvNamespaceDaemon() {
+ 	hypervisor.InterfaceCount = 0
+ 	var err error
+ 	if hypervisor.HDriver, err = driverloader.Probe(driver); err != nil {
+-		glog.V(1).Infof("%s\n", err.Error())
++		glog.Errorf("%s\n", err.Error())
+ 		os.Exit(1)
+ 	}
+ 
+diff --git a/run.go b/run.go
+index f02786c..db6f118 100644
+--- a/run.go
++++ b/run.go
+@@ -179,13 +179,16 @@ command(s) that get executed on start, edit the args parameter of the spec. See
+ 
+ func startContainer(context *cli.Context, container, address string, config *specs.Spec) int {
+ 	glog.V(3).Infof("trying to start container %q", container)
+-	pid := os.Getpid()
++	//pid := os.Getpid()
+ 	r := &types.CreateContainerRequest{
+ 		Id:         container,
+ 		BundlePath: context.String("bundle"),
+-		Stdin:      fmt.Sprintf("/proc/%d/fd/0", pid),
+-		Stdout:     fmt.Sprintf("/proc/%d/fd/1", pid),
+-		Stderr:     fmt.Sprintf("/proc/%d/fd/2", pid),
++		//Stdin:      fmt.Sprintf("/proc/%d/fd/0", pid),
++		//Stdout: fmt.Sprintf("/proc/%d/fd/1", pid),
++		//Stderr: fmt.Sprintf("/proc/%d/fd/2", pid),
++		Stdin:  fmt.Sprintf("/tmp/fifo/stdin"),
++		Stdout: fmt.Sprintf("/tmp/fifo/stdout"),
++		Stderr: fmt.Sprintf("/tmp/fifo/stderr"),
+ 	}
+ 
+ 	c := getClient(address)
+@@ -203,18 +206,18 @@ func startContainer(context *cli.Context, container, address string, config *spe
+ 		defer term.RestoreTerminal(os.Stdin.Fd(), s)
+ 		monitorTtySize(c, container, "init")
+ 	}
+-	if context.String("pid-file") != "" {
+-		stateData, err := ioutil.ReadFile(filepath.Join(context.GlobalString("root"), container, stateJson))
+-		if err != nil {
+-			fmt.Printf("read state.json error %v\n", err)
+-			return -1
+-		}
++	stateData, err := ioutil.ReadFile(filepath.Join(context.GlobalString("root"), container, stateJson))
++	if err != nil {
++		fmt.Printf("read state.json error %v\n", err)
++		return -1
++	}
+ 
+-		var s specs.State
+-		if err := json.Unmarshal(stateData, &s); err != nil {
+-			fmt.Printf("unmarshal state.json error %v\n", err)
+-			return -1
+-		}
++	var s specs.State
++	if err := json.Unmarshal(stateData, &s); err != nil {
++		fmt.Printf("unmarshal state.json error %v\n", err)
++		return -1
++	}
++	if context.String("pid-file") != "" {
+ 		err = createPidFile(context.String("pid-file"), s.Pid)
+ 		if err != nil {
+ 			fmt.Printf("create pid-file error %v\n", err)
+-- 
+2.9.2
+

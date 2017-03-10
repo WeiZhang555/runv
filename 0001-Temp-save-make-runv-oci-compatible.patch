@@ -1,0 +1,795 @@
+From 9445d105b5e603392bc8e222dec9bdf416a7845f Mon Sep 17 00:00:00 2001
+From: Zhang Wei <zhangwei555@huawei.com>
+Date: Wed, 8 Mar 2017 11:21:33 +0800
+Subject: [PATCH 1/2] Temp save: make runv oci-compatible
+
+Signed-off-by: Zhang Wei <zhangwei555@huawei.com>
+---
+ create.go               |  55 ++++++++++
+ hypervisor/init_comm.go |   2 +-
+ main.go                 |  30 ++++-
+ namespaced.go           |  14 ++-
+ run.go                  | 283 ++++++++++++++++++++++++++++++++++++++++++++++++
+ start.go                | 254 +------------------------------------------
+ supervisor/container.go |   4 +-
+ 7 files changed, 386 insertions(+), 256 deletions(-)
+ create mode 100644 create.go
+ create mode 100644 run.go
+
+diff --git a/create.go b/create.go
+new file mode 100644
+index 0000000..ade7e3e
+--- /dev/null
++++ b/create.go
+@@ -0,0 +1,55 @@
++package main
++
++import (
++	"fmt"
++	"os"
++
++	"github.com/codegangsta/cli"
++)
++
++var createCommand = cli.Command{
++	Name:  "create",
++	Usage: "create a container (not supported yet)",
++	ArgsUsage: `<container-id>
++
++Where "<container-id>" is your name for the instance of the container that you
++are starting. The name you provide for the container instance must be unique on
++your host.`,
++	Description: `The create command creates an instance of a container for a bundle. The bundle
++is a directory with a specification file named "` + specConfig + `" and a root
++filesystem.
++
++The specification file includes an args parameter. The args parameter is used
++to specify command(s) that get run when the container is started. To change the
++command(s) that get executed on start, edit the args parameter of the spec. See
++"runc spec --help" for more explanation.`,
++	Flags: []cli.Flag{
++		cli.StringFlag{
++			Name:  "bundle, b",
++			Value: "",
++			Usage: `path to the root of the bundle directory, defaults to the current directory`,
++		},
++		cli.StringFlag{
++			Name:  "console-socket",
++			Value: "",
++			Usage: "path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal",
++		},
++		cli.StringFlag{
++			Name:  "pid-file",
++			Value: "",
++			Usage: "specify the file to write the process id to",
++		},
++		cli.BoolFlag{
++			Name:  "no-pivot",
++			Usage: "do not use pivot root to jail process inside rootfs.  This should be used whenever the rootfs is on top of a ramdisk",
++		},
++		cli.BoolFlag{
++			Name:  "no-new-keyring",
++			Usage: "do not create a new session keyring for the container.  This will cause the container to inherit the calling processes session key",
++		},
++	},
++	Action: func(context *cli.Context) {
++		fmt.Printf("Start isn't supported currently.\n")
++		os.Exit(-1)
++	},
++}
+diff --git a/hypervisor/init_comm.go b/hypervisor/init_comm.go
+index 8959c0d..665d588 100644
+--- a/hypervisor/init_comm.go
++++ b/hypervisor/init_comm.go
+@@ -70,7 +70,7 @@ func waitConsoleOutput(ctx *VmContext) {
+ 	for {
+ 		line, ok := <-cout
+ 		if ok {
+-			glog.V(1).Info("[console] ", line)
++			glog.V(3).Info("[console] ", line)
+ 		} else {
+ 			glog.Info("console output end")
+ 			break
+diff --git a/main.go b/main.go
+index 8dee5ca..0067d52 100644
+--- a/main.go
++++ b/main.go
+@@ -1,6 +1,7 @@
+ package main
+ 
+ import (
++	"flag"
+ 	"fmt"
+ 	"io/ioutil"
+ 	"log"
+@@ -104,18 +105,43 @@ func main() {
+ 			Usage: "runv-compatible initrd for the container",
+ 		},
+ 		cli.StringFlag{
++			Name:  "bios",
++			Usage: "runv-compatible bios file for the container",
++		},
++		cli.StringFlag{
++			Name:  "cbfs",
++			Usage: "runv-compatible cbfs file for the container",
++		},
++		cli.StringFlag{
+ 			Name:  "vbox",
+ 			Usage: "runv-compatible boot ISO for the container for vbox driver",
+ 		},
+ 	}
+ 	app.Commands = []cli.Command{
+-		startCommand,
+-		specCommand,
++		createCommand,
+ 		execCommand,
+ 		killCommand,
+ 		listCommand,
++		runCommand,
++		specCommand,
++		startCommand,
+ 		stateCommand,
+ 	}
++	app.Before = func(context *cli.Context) error {
++		logdir := context.GlobalString("log_dir")
++		if logdir != "" {
++			if err := os.MkdirAll(logdir, 0750); err != nil {
++				return fmt.Errorf("can't create dir for log files")
++			}
++		}
++		if context.GlobalBool("debug") {
++			flag.CommandLine.Parse([]string{"-v", "3", "--log_dir", logdir, "--alsologtostderr"})
++		} else {
++			flag.CommandLine.Parse([]string{"-v", "1", "--log_dir", logdir})
++		}
++		return nil
++	}
++
+ 	if err := app.Run(os.Args); err != nil {
+ 		fmt.Printf("%s\n", err.Error())
+ 	}
+diff --git a/namespaced.go b/namespaced.go
+index 6d2ba50..53ab461 100644
+--- a/namespaced.go
++++ b/namespaced.go
+@@ -27,12 +27,17 @@ func runvNamespaceDaemon() {
+ 		driver    string
+ 		kernel    string
+ 		initrd    string
++		bios      string
++		cbfs      string
+ 	)
+ 	flag.StringVar(&namespace, "namespace", "", "")
+ 	flag.StringVar(&state, "state", "", "")
+ 	flag.StringVar(&driver, "driver", "", "")
++	flag.StringVar(&bios, "bios", "", "")
++	flag.StringVar(&cbfs, "cbfs", "", "")
+ 	flag.StringVar(&kernel, "kernel", "", "")
+ 	flag.StringVar(&initrd, "initrd", "", "")
++
+ 	flag.Parse()
+ 
+ 	hypervisor.InterfaceCount = 0
+@@ -42,21 +47,23 @@ func runvNamespaceDaemon() {
+ 		os.Exit(1)
+ 	}
+ 
+-	daemon(namespace, state, kernel, initrd)
++	glog.V(3).Infof("creating runv namespaced daemon")
++	daemon(namespace, state, bios, cbfs, kernel, initrd)
+ }
+ 
+-func daemon(namespace, state, kernel, initrd string) error {
++func daemon(namespace, state, bios, cbfs, kernel, initrd string) error {
+ 	// setup a standard reaper so that we don't leave any zombies if we are still alive
+ 	// this is just good practice because we are spawning new processes
+ 	s := make(chan os.Signal, 2048)
+ 	signal.Notify(s, syscall.SIGCHLD, syscall.SIGTERM, syscall.SIGINT)
+ 
+ 	// TODO: make the factory create only one vm atmost
+-	f := factory.NewFromConfigs("", "", kernel, initrd, nil)
++	f := factory.NewFromConfigs(bios, cbfs, kernel, initrd, nil)
+ 	sv, err := supervisor.New(state, namespace, f)
+ 	if err != nil {
+ 		return err
+ 	}
++	glog.V(3).Infof("supervisor created")
+ 
+ 	address := filepath.Join(namespace, "namespaced.sock")
+ 	server, err := startServer(address, sv)
+@@ -64,6 +71,7 @@ func daemon(namespace, state, kernel, initrd string) error {
+ 		return err
+ 	}
+ 	go namespaceShare(sv, namespace, state, server)
++	glog.V(3).Infof("start server successfully")
+ 
+ 	for ss := range s {
+ 		switch ss {
+diff --git a/run.go b/run.go
+new file mode 100644
+index 0000000..f02786c
+--- /dev/null
++++ b/run.go
+@@ -0,0 +1,283 @@
++package main
++
++import (
++	"encoding/json"
++	"fmt"
++	"io/ioutil"
++	"os"
++	"path/filepath"
++	"strings"
++	"time"
++
++	"github.com/codegangsta/cli"
++	"github.com/docker/containerd/api/grpc/types"
++	"github.com/golang/glog"
++	"github.com/hyperhq/runv/lib/term"
++	"github.com/hyperhq/runv/lib/utils"
++	"github.com/kardianos/osext"
++	"github.com/opencontainers/runtime-spec/specs-go"
++	netcontext "golang.org/x/net/context"
++)
++
++func firstExistingFile(candidates []string) string {
++	for _, file := range candidates {
++		if _, err := os.Stat(file); err == nil {
++			return file
++		}
++	}
++	return ""
++}
++
++var runCommand = cli.Command{
++	Name:  "run",
++	Usage: "create and run a container",
++	ArgsUsage: `<container-id>
++
++Where "<container-id>" is your name for the instance of the container that you
++are starting. The name you provide for the container instance must be unique on
++your host.`,
++	Description: `The run command creates an instance of a container for a bundle. The bundle
++is a directory with a specification file named "` + specConfig + `" and a root
++filesystem.
++
++The specification file includes an args parameter. The args parameter is used
++to specify command(s) that get run when the container is started. To change the
++command(s) that get executed on start, edit the args parameter of the spec. See
++"runv spec --help" for more explanation.`,
++	Flags: []cli.Flag{
++		cli.StringFlag{
++			Name:  "bundle, b",
++			Usage: "path to the root of the bundle directory",
++		},
++		cli.StringFlag{
++			Name:  "console",
++			Usage: "specify the pty slave path for use with the container",
++		},
++		cli.StringFlag{
++			Name:  "pid-file",
++			Usage: "specify the file to write the process id to",
++		},
++		cli.BoolFlag{
++			Name:  "no-pivot",
++			Usage: "[ignore on runv] do not use pivot root to jail process inside rootfs.  This should be used whenever the rootfs is on top of a ramdisk",
++		},
++		cli.BoolFlag{
++			Name:  "detach, d",
++			Usage: "detach from the container's process",
++		},
++	},
++	Action: func(context *cli.Context) {
++		root := context.GlobalString("root")
++		bundle := context.String("bundle")
++		container := context.Args().First()
++		ocffile := filepath.Join(bundle, specConfig)
++		spec, err := loadSpec(ocffile)
++		if err != nil {
++			fmt.Printf("load config failed %v\n", err)
++			os.Exit(-1)
++		}
++		if os.Geteuid() != 0 {
++			fmt.Printf("runv should be run as root\n")
++			os.Exit(-1)
++		}
++		_, err = os.Stat(filepath.Join(root, container))
++		if err == nil {
++			fmt.Printf("Container %s exists\n", container)
++			os.Exit(-1)
++		}
++
++		var sharedContainer string
++		for _, ns := range spec.Linux.Namespaces {
++			if ns.Path != "" {
++				if strings.Contains(ns.Path, "/") {
++					fmt.Printf("Runv doesn't support path to namespace file, it supports containers name as shared namespaces only\n")
++					os.Exit(-1)
++				}
++				if ns.Type == "mount" {
++					// TODO support it!
++					fmt.Printf("Runv doesn't support shared mount namespace currently\n")
++					os.Exit(-1)
++				}
++				sharedContainer = ns.Path
++				_, err = os.Stat(filepath.Join(root, sharedContainer, stateJson))
++				if err != nil {
++					fmt.Printf("The container %s is not existing or not ready\n", sharedContainer)
++					os.Exit(-1)
++				}
++				_, err = os.Stat(filepath.Join(root, sharedContainer, "namespace"))
++				if err != nil {
++					fmt.Printf("The container %s is not ready\n", sharedContainer)
++					os.Exit(-1)
++				}
++			}
++		}
++
++		driver := context.GlobalString("driver")
++
++		var kernel, initrd, bios, cbfs string
++		if sharedContainer == "" {
++			kernel, initrd, bios, cbfs = getKernelAndCbfs(context, bundle, spec.Root.Path)
++		}
++
++		var address string
++		if sharedContainer != "" {
++			address = filepath.Join(root, container, "namespace/namespaced.sock")
++		} else {
++			path, err := osext.Executable()
++			if err != nil {
++				fmt.Printf("cannot find self executable path for %s: %v\n", os.Args[0], err)
++				os.Exit(-1)
++			}
++
++			os.MkdirAll(context.String("log_dir"), 0755)
++			namespace, err := ioutil.TempDir("/run", "runv-namespace-")
++			if err != nil {
++				fmt.Printf("Failed to create runv namespace path: %v", err)
++				os.Exit(-1)
++			}
++
++			args := []string{
++				"runv-namespaced",
++				"--namespace", namespace,
++				"--state", root,
++				"--bios", bios,
++				"--cbfs", cbfs,
++				"--driver", driver,
++				"--kernel", kernel,
++				"--initrd", initrd,
++			}
++			if context.GlobalBool("debug") {
++				args = append(args, "-v", "3", "--log_dir", context.GlobalString("log_dir"), "--alsologtostderr")
++			} else {
++				args = append(args, "-v", "1", "--log_dir", context.GlobalString("log_dir"))
++			}
++			_, err = utils.ExecInDaemon(path, args)
++			if err != nil {
++				fmt.Printf("failed to launch runv daemon, error:%v\n", err)
++				os.Exit(-1)
++			}
++			address = filepath.Join(namespace, "namespaced.sock")
++		}
++
++		status := startContainer(context, container, address, spec)
++		os.Exit(status)
++	},
++}
++
++// Shared namespaces multiple containers suppurt
++// The runv supports pod-style shared namespaces currently.
++// (More fine grain shared namespaces style (docker/runc style) is under implementation)
++//
++// Pod-style shared namespaces:
++// * if two containers share at least one type of namespace, they share all kinds of namespaces except the mount namespace
++// * mount namespace can't be shared, each container has its own mount namespace
++//
++// Implementation detail:
++// * Shared namespaces is configured in Spec.Linux.Namespaces, the namespace Path should be existing container name.
++// * In runv, shared namespaces multiple containers are located in the same VM which is managed by a runv-daemon.
++// * Any running container can exit in any arbitrary order, the runv-daemon and the VM are existed until the last container of the VM is existed
++
++func startContainer(context *cli.Context, container, address string, config *specs.Spec) int {
++	glog.V(3).Infof("trying to start container %q", container)
++	pid := os.Getpid()
++	r := &types.CreateContainerRequest{
++		Id:         container,
++		BundlePath: context.String("bundle"),
++		Stdin:      fmt.Sprintf("/proc/%d/fd/0", pid),
++		Stdout:     fmt.Sprintf("/proc/%d/fd/1", pid),
++		Stderr:     fmt.Sprintf("/proc/%d/fd/2", pid),
++	}
++
++	c := getClient(address)
++	timestamp := uint64(time.Now().Unix())
++	if _, err := c.CreateContainer(netcontext.Background(), r); err != nil {
++		fmt.Printf("error %v\n", err)
++		return -1
++	}
++	if config.Process.Terminal {
++		s, err := term.SetRawTerminal(os.Stdin.Fd())
++		if err != nil {
++			fmt.Printf("SetRawTerminal error: %v\n", err)
++			return -1
++		}
++		defer term.RestoreTerminal(os.Stdin.Fd(), s)
++		monitorTtySize(c, container, "init")
++	}
++	if context.String("pid-file") != "" {
++		stateData, err := ioutil.ReadFile(filepath.Join(context.GlobalString("root"), container, stateJson))
++		if err != nil {
++			fmt.Printf("read state.json error %v\n", err)
++			return -1
++		}
++
++		var s specs.State
++		if err := json.Unmarshal(stateData, &s); err != nil {
++			fmt.Printf("unmarshal state.json error %v\n", err)
++			return -1
++		}
++		err = createPidFile(context.String("pid-file"), s.Pid)
++		if err != nil {
++			fmt.Printf("create pid-file error %v\n", err)
++		}
++	}
++
++	glog.V(3).Infof("container %q is started successfully", container)
++	return waitForExit(c, timestamp, container, "init")
++
++}
++
++// createPidFile creates a file with the processes pid inside it atomically
++// it creates a temp file with the paths filename + '.' infront of it
++// then renames the file
++func createPidFile(path string, pid int) error {
++	var (
++		tmpDir  = filepath.Dir(path)
++		tmpName = filepath.Join(tmpDir, fmt.Sprintf(".%s", filepath.Base(path)))
++	)
++	f, err := os.OpenFile(tmpName, os.O_RDWR|os.O_CREATE|os.O_EXCL|os.O_SYNC, 0666)
++	if err != nil {
++		return err
++	}
++	_, err = fmt.Fprintf(f, "%d", pid)
++	f.Close()
++	if err != nil {
++		return err
++	}
++	return os.Rename(tmpName, path)
++}
++
++func getKernelAndCbfs(context *cli.Context, bundle, rootPath string) (string, string, string, string) {
++	var (
++		err                        error
++		kernel, initrd, bios, cbfs string
++	)
++	type contextKey string
++	for k, v := range map[contextKey]struct {
++		filename string
++		strPtr   *string
++	}{
++		"kernel": {"kernel", &kernel},
++		"initrd": {"initrd.img", &initrd},
++		"bios":   {"bios.bin", &bios},
++		"cbfs":   {"cbfs.rom", &cbfs},
++	} {
++		*v.strPtr = context.GlobalString(string(k))
++		if *v.strPtr == "" {
++			*v.strPtr = firstExistingFile([]string{
++				filepath.Join(bundle, rootPath, "boot", v.filename),
++				filepath.Join(bundle, "boot", v.filename),
++				filepath.Join(bundle, v.filename),
++				filepath.Join("/usr/share/runv-containerd/", v.filename),
++			})
++		}
++
++		// convert the paths to abs
++		if *v.strPtr != "" {
++			if *v.strPtr, err = filepath.Abs(*v.strPtr); err != nil {
++				fmt.Printf("Cannot get abs path for %s: %s\n", string(k), err.Error())
++				os.Exit(-1)
++			}
++		}
++	}
++	return kernel, initrd, bios, cbfs
++}
+diff --git a/start.go b/start.go
+index be3f04e..d2b1df4 100644
+--- a/start.go
++++ b/start.go
+@@ -1,265 +1,23 @@
+ package main
+ 
+ import (
+-	"encoding/json"
+ 	"fmt"
+-	"io/ioutil"
+ 	"os"
+-	"path/filepath"
+-	"strings"
+-	"time"
+ 
+ 	"github.com/codegangsta/cli"
+-	"github.com/docker/containerd/api/grpc/types"
+-	"github.com/hyperhq/runv/lib/term"
+-	"github.com/hyperhq/runv/lib/utils"
+-	"github.com/kardianos/osext"
+-	"github.com/opencontainers/runtime-spec/specs-go"
+-	netcontext "golang.org/x/net/context"
+ )
+ 
+-func firstExistingFile(candidates []string) string {
+-	for _, file := range candidates {
+-		if _, err := os.Stat(file); err == nil {
+-			return file
+-		}
+-	}
+-	return ""
+-}
+-
+ var startCommand = cli.Command{
+ 	Name:  "start",
+-	Usage: "create and run a container",
+-	ArgsUsage: `<container-id>
+-
++	Usage: "executes the user defined process in a created container (not supported yet)",
++	ArgsUsage: `<container-id> [container-id...]
++	
+ Where "<container-id>" is your name for the instance of the container that you
+ are starting. The name you provide for the container instance must be unique on
+ your host.`,
+-	Description: `The start command creates an instance of a container for a bundle. The bundle
+-is a directory with a specification file named "` + specConfig + `" and a root
+-filesystem.
+-
+-The specification file includes an args parameter. The args parameter is used
+-to specify command(s) that get run when the container is started. To change the
+-command(s) that get executed on start, edit the args parameter of the spec. See
+-"runv spec --help" for more explanation.`,
+-	Flags: []cli.Flag{
+-		cli.StringFlag{
+-			Name:  "bundle, b",
+-			Usage: "path to the root of the bundle directory",
+-		},
+-		cli.StringFlag{
+-			Name:  "console",
+-			Usage: "specify the pty slave path for use with the container",
+-		},
+-		cli.StringFlag{
+-			Name:  "pid-file",
+-			Usage: "specify the file to write the process id to",
+-		},
+-		cli.BoolFlag{
+-			Name:  "no-pivot",
+-			Usage: "[ignore on runv] do not use pivot root to jail process inside rootfs.  This should be used whenever the rootfs is on top of a ramdisk",
+-		},
+-		cli.BoolFlag{
+-			Name:  "detach, d",
+-			Usage: "detach from the container's process",
+-		},
+-	},
++	Description: `The start command executes the user defined process in a created container.`,
+ 	Action: func(context *cli.Context) {
+-		root := context.GlobalString("root")
+-		bundle := context.String("bundle")
+-		container := context.Args().First()
+-		ocffile := filepath.Join(bundle, specConfig)
+-		spec, err := loadSpec(ocffile)
+-		if err != nil {
+-			fmt.Printf("load config failed %v\n", err)
+-			os.Exit(-1)
+-		}
+-		if os.Geteuid() != 0 {
+-			fmt.Printf("runv should be run as root\n")
+-			os.Exit(-1)
+-		}
+-		_, err = os.Stat(filepath.Join(root, container))
+-		if err == nil {
+-			fmt.Printf("Container %s exists\n", container)
+-			os.Exit(-1)
+-		}
+-
+-		var sharedContainer string
+-		for _, ns := range spec.Linux.Namespaces {
+-			if ns.Path != "" {
+-				if strings.Contains(ns.Path, "/") {
+-					fmt.Printf("Runv doesn't support path to namespace file, it supports containers name as shared namespaces only\n")
+-					os.Exit(-1)
+-				}
+-				if ns.Type == "mount" {
+-					// TODO support it!
+-					fmt.Printf("Runv doesn't support shared mount namespace currently\n")
+-					os.Exit(-1)
+-				}
+-				sharedContainer = ns.Path
+-				_, err = os.Stat(filepath.Join(root, sharedContainer, stateJson))
+-				if err != nil {
+-					fmt.Printf("The container %s is not existing or not ready\n", sharedContainer)
+-					os.Exit(-1)
+-				}
+-				_, err = os.Stat(filepath.Join(root, sharedContainer, "namespace"))
+-				if err != nil {
+-					fmt.Printf("The container %s is not ready\n", sharedContainer)
+-					os.Exit(-1)
+-				}
+-			}
+-		}
+-
+-		driver := context.GlobalString("driver")
+-		kernel := context.GlobalString("kernel")
+-		initrd := context.GlobalString("initrd")
+-		// only set the default kernel/initrd when it is the first container(sharedContainer == "")
+-		if kernel == "" && sharedContainer == "" {
+-			kernel = firstExistingFile([]string{
+-				filepath.Join(bundle, spec.Root.Path, "boot/vmlinuz"),
+-				filepath.Join(bundle, "boot/vmlinuz"),
+-				filepath.Join(bundle, "vmlinuz"),
+-				"/var/lib/hyper/kernel",
+-			})
+-		}
+-		if initrd == "" && sharedContainer == "" {
+-			initrd = firstExistingFile([]string{
+-				filepath.Join(bundle, spec.Root.Path, "boot/initrd.img"),
+-				filepath.Join(bundle, "boot/initrd.img"),
+-				filepath.Join(bundle, "initrd.img"),
+-				"/var/lib/hyper/hyper-initrd.img",
+-			})
+-		}
+-
+-		// convert the paths to abs
+-		kernel, err = filepath.Abs(kernel)
+-		if err != nil {
+-			fmt.Printf("Cannot get abs path for kernel: %s\n", err.Error())
+-			os.Exit(-1)
+-		}
+-		initrd, err = filepath.Abs(initrd)
+-		if err != nil {
+-			fmt.Printf("Cannot get abs path for initrd: %s\n", err.Error())
+-			os.Exit(-1)
+-		}
+-
+-		var address string
+-		if sharedContainer != "" {
+-			address = filepath.Join(root, container, "namespace/namespaced.sock")
+-		} else {
+-			path, err := osext.Executable()
+-			if err != nil {
+-				fmt.Printf("cannot find self executable path for %s: %v\n", os.Args[0], err)
+-				os.Exit(-1)
+-			}
+-
+-			os.MkdirAll(context.String("log_dir"), 0755)
+-			namespace, err := ioutil.TempDir("/run", "runv-namespace-")
+-			if err != nil {
+-				fmt.Printf("Failed to create runv namespace path: %v", err)
+-				os.Exit(-1)
+-			}
+-
+-			args := []string{
+-				"runv-namespaced",
+-				"--namespace", namespace,
+-				"--state", root,
+-				"--driver", driver,
+-				"--kernel", kernel,
+-				"--initrd", initrd,
+-			}
+-			if context.GlobalBool("debug") {
+-				args = append(args, "-v", "3", "--log_dir", context.GlobalString("log_dir"))
+-			}
+-			_, err = utils.ExecInDaemon(path, args)
+-			if err != nil {
+-				fmt.Printf("failed to launch runv daemon, error:%v\n", err)
+-				os.Exit(-1)
+-			}
+-			address = filepath.Join(namespace, "namespaced.sock")
+-		}
+-
+-		status := startContainer(context, container, address, spec)
+-		os.Exit(status)
++		fmt.Printf("Start isn't supported currently.\n")
++		os.Exit(-1)
+ 	},
+ }
+-
+-// Shared namespaces multiple containers suppurt
+-// The runv supports pod-style shared namespaces currently.
+-// (More fine grain shared namespaces style (docker/runc style) is under implementation)
+-//
+-// Pod-style shared namespaces:
+-// * if two containers share at least one type of namespace, they share all kinds of namespaces except the mount namespace
+-// * mount namespace can't be shared, each container has its own mount namespace
+-//
+-// Implementation detail:
+-// * Shared namespaces is configured in Spec.Linux.Namespaces, the namespace Path should be existing container name.
+-// * In runv, shared namespaces multiple containers are located in the same VM which is managed by a runv-daemon.
+-// * Any running container can exit in any arbitrary order, the runv-daemon and the VM are existed until the last container of the VM is existed
+-
+-func startContainer(context *cli.Context, container, address string, config *specs.Spec) int {
+-	pid := os.Getpid()
+-	r := &types.CreateContainerRequest{
+-		Id:         container,
+-		BundlePath: context.String("bundle"),
+-		Stdin:      fmt.Sprintf("/proc/%d/fd/0", pid),
+-		Stdout:     fmt.Sprintf("/proc/%d/fd/1", pid),
+-		Stderr:     fmt.Sprintf("/proc/%d/fd/2", pid),
+-	}
+-
+-	c := getClient(address)
+-	timestamp := uint64(time.Now().Unix())
+-	if _, err := c.CreateContainer(netcontext.Background(), r); err != nil {
+-		fmt.Printf("error %v\n", err)
+-		return -1
+-	}
+-	if config.Process.Terminal {
+-		s, err := term.SetRawTerminal(os.Stdin.Fd())
+-		if err != nil {
+-			fmt.Printf("error %v\n", err)
+-			return -1
+-		}
+-		defer term.RestoreTerminal(os.Stdin.Fd(), s)
+-		monitorTtySize(c, container, "init")
+-	}
+-	if context.String("pid-file") != "" {
+-		stateData, err := ioutil.ReadFile(filepath.Join(context.GlobalString("root"), container, stateJson))
+-		if err != nil {
+-			fmt.Printf("read state.json error %v\n", err)
+-			return -1
+-		}
+-
+-		var s specs.State
+-		if err := json.Unmarshal(stateData, &s); err != nil {
+-			fmt.Printf("unmarshal state.json error %v\n", err)
+-			return -1
+-		}
+-		err = createPidFile(context.String("pid-file"), s.Pid)
+-		if err != nil {
+-			fmt.Printf("create pid-file error %v\n", err)
+-		}
+-	}
+-	return waitForExit(c, timestamp, container, "init")
+-
+-}
+-
+-// createPidFile creates a file with the processes pid inside it atomically
+-// it creates a temp file with the paths filename + '.' infront of it
+-// then renames the file
+-func createPidFile(path string, pid int) error {
+-	var (
+-		tmpDir  = filepath.Dir(path)
+-		tmpName = filepath.Join(tmpDir, fmt.Sprintf(".%s", filepath.Base(path)))
+-	)
+-	f, err := os.OpenFile(tmpName, os.O_RDWR|os.O_CREATE|os.O_EXCL|os.O_SYNC, 0666)
+-	if err != nil {
+-		return err
+-	}
+-	_, err = fmt.Fprintf(f, "%d", pid)
+-	f.Close()
+-	if err != nil {
+-		return err
+-	}
+-	return os.Rename(tmpName, path)
+-}
+diff --git a/supervisor/container.go b/supervisor/container.go
+index 38a8a30..dd843c4 100644
+--- a/supervisor/container.go
++++ b/supervisor/container.go
+@@ -160,13 +160,13 @@ func (c *Container) start(p *Process) error {
+ 
+ 	err = c.ownerPod.vm.Attach(p.stdio, c.Id, nil)
+ 	if err != nil {
+-		glog.V(1).Infof("StartPod fail: fail to set up tty connection.\n")
++		glog.Errorf("StartPod fail: fail to set up tty connection.\n")
+ 		return err
+ 	}
+ 
+ 	err = execPrestartHooks(c.Spec, state)
+ 	if err != nil {
+-		glog.V(1).Infof("execute Prestart hooks failed, %s\n", err.Error())
++		glog.Errorf("execute Prestart hooks failed, %s\n", err.Error())
+ 		return err
+ 	}
+ 
+-- 
+2.9.2
+

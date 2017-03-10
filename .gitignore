@@ -5,7 +5,6 @@
 
 # Patch
 *.diff
-*.patch
 *.orig
 *.rej
 
