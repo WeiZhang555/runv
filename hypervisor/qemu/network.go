@@ -12,6 +12,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/hyperhq/runv/hypervisor/network"
+	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -33,6 +34,15 @@ func GetTapFd(device, bridge, options string) (int, error) {
 		errno syscall.Errno
 	)
 
+	// check if tapname exists, if true, use existing one instead of create new one
+	if device != "" {
+		_, err := netlink.LinkByName(device)
+		// link exist, use it
+		if err == nil {
+			return -1, nil
+		}
+	}
+
 	tapFile, err := os.OpenFile("/dev/net/tun", os.O_RDWR, 0)
 	if err != nil {
 		return -1, err
@@ -48,11 +58,13 @@ func GetTapFd(device, bridge, options string) (int, error) {
 		return -1, fmt.Errorf("create tap device failed\n")
 	}
 
-	err = network.UpAndAddToBridge(device, bridge, options)
-	if err != nil {
-		glog.Errorf("Add to bridge failed %s %s", bridge, device)
-		tapFile.Close()
-		return -1, err
+	if bridge != "" {
+		err = network.UpAndAddToBridge(device, bridge, options)
+		if err != nil {
+			glog.Errorf("Add to bridge failed %s %s", bridge, device)
+			tapFile.Close()
+			return -1, err
+		}
 	}
 
 	return int(tapFile.Fd()), nil
